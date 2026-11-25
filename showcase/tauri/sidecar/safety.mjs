@@ -401,6 +401,9 @@ export function classifyCommand(cmd, home, { exists, cwd: start = null, own = nu
 
 const RUNNABLE = /\.(app|command|sh|bash|zsh|tool|terminal|scpt|scptd|applescript|workflow|action|pkg|mpkg|dmg|jar|py|rb|pl|js|mjs|exe|bat|cmd|ps1|shortcut|mobileconfig|kext|plugin|prefPane|saver|desktop|appimage|deb|rpm|run|flatpakref|flatpak|snap)\/?$/i;
 // Where installed apps live: opening one there just starts it. Linux lists them as .desktop files.
+// Windows: installed programs live in Program Files, or for one user in AppData\Local\Programs (Obsidian, VS Code,
+// Discord). Their .exe starts the app the way its Start menu entry does; anything else there stays blocked.
+const winAppDir = (abs, home) => /^[a-z]:\/program files( \(x86\))?\//i.test(abs) || abs.toLowerCase().startsWith(`${home.toLowerCase()}/appdata/local/programs/`);
 const APP_DIRS = ['/Applications/', '/System/Applications/', '/System/Library/CoreServices/', '/usr/share/applications/', '/usr/local/share/applications/', '/var/lib/flatpak/exports/share/applications/', '/var/lib/snapd/desktop/applications/'];
 
 /** open: websites and mail, documents and folders, and apps by name. Not scripts, installers or odd links. */
@@ -418,8 +421,9 @@ export function checkOpen(target, home, { executable = false } = {}) {
     const abs = norm(t, home);
     const r = checkRead(abs, home);
     if (r.level === BLOCK) return verdict(BLOCK, r.reason);
-    const inApps = APP_DIRS.some((d) => abs.startsWith(d));
-    if ((RUNNABLE.test(abs) || executable) && !inApps) return verdict(BLOCK, `${t} is a script, installer or app that would run, so I won't open it. Open it yourself if you trust it.`);
+    const inApps = APP_DIRS.some((d) => abs.startsWith(d))
+      || (/\.exe$/i.test(abs) && !/(unins|setup|install|updat)[^/]*$/i.test(abs) && winAppDir(abs, home));
+    if ((RUNNABLE.test(abs) || executable) && !inApps) return verdict(BLOCK, `${t} is a script, installer or app that would run, so I won't open it. Open it yourself if you trust it. To start an installed app, open it by its name instead (like "Obsidian").`);
     if (!inApps && SYSTEM_ROOTS.some((d) => abs === d || abs.startsWith(d + '/'))) return verdict(BLOCK, `${t} is a system file, so I won't open it.`);
     return verdict(SAFE);
   }
