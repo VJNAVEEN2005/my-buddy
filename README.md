@@ -6,6 +6,16 @@
 
 <p align="center">A glowing AI buddy that lives on your desktop, talks with you, and runs errands in your own Chrome.</p>
 
+<p align="center">
+  <a href="https://vjnaveen2005.github.io/my-buddy/"><b>Website</b></a> ·
+  <a href="https://github.com/VJNAVEEN2005/my-buddy/releases/latest"><b>Download for Windows</b></a>
+</p>
+
+<p align="center">
+  <a href="https://vjnaveen2005.github.io/my-buddy/#film"><img src="docs/assets/poster.jpg" width="720" alt="Watch the 72-second My Buddy film"></a><br>
+  <sub>▶ Watch the 72-second film (<a href="docs/assets/promo.mp4">MP4</a>)</sub>
+</p>
+
 ## What it does
 
 - **Talk or type.** Hold Ctrl+Alt and speak, or tap Ctrl+Shift to type. Say **"Hey Buddy"** with the wake word on.

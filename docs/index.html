@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Buddy · a friend on your screen</title>
+<meta name="description" content="My Buddy is a free, open-source AI buddy for Windows. Ask about anything on your screen and it points at the answer, talks with you, runs errands in your Chrome and helps you study.">
+<meta property="og:title" content="My Buddy · a friend on your screen">
+<meta property="og:description" content="A free, open-source AI buddy for Windows that points, talks, runs errands and helps you study.">
+<meta property="og:image" content="https://vjnaveen2005.github.io/my-buddy/assets/poster.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon.png">
+<style>
+@font-face{font-family:Archivo;src:url(assets/fonts/archivo.woff2) format('woff2');font-weight:100 900;font-stretch:62% 125%;font-display:swap}
+@font-face{font-family:ISerif;src:url(assets/fonts/serif-italic.woff2) format('woff2');font-style:italic;font-display:swap}
+@font-face{font-family:JMono;src:url(assets/fonts/mono.woff2) format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:Virgil;src:url(assets/fonts/virgil.woff2) format('woff2');font-display:swap}
+:root{--ink:#111216;--paper:#F2EEE6;--paper2:#E9E4D9;--night:#0B1220;--night2:#121a2c;--cyan:#5EE6E6;--lav:#C9BDFF;--snow:#ECE8F8;--muted:#5d5f66;--line:#1b1b1f}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font:17px/1.6 Archivo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+img,video{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+.mono{font-family:JMono,ui-monospace,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.hand{font-family:Virgil,cursive}
+h1,h2,h3{font-weight:900;letter-spacing:-.025em;line-height:1}
+h2{font-size:clamp(40px,6vw,72px)}
+.night{background:var(--night);color:var(--snow)}
+.night .muted{color:#9aa3b8}
+.muted{color:var(--muted)}
+kbd{display:inline-block;font:500 13px JMono,monospace;padding:4px 9px 3px;border:1.5px solid currentColor;border-bottom-width:3px;border-radius:7px;line-height:1.2}
+
+/* nav */
+nav{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.92);backdrop-filter:blur(12px);color:var(--snow);border-bottom:1px solid rgba(255,255,255,.07)}
+nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+nav .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;text-decoration:none}
+nav .brand img{width:32px;height:32px;border-radius:9px}
+nav .links{display:flex;gap:22px;margin-left:auto;font-size:15px}
+nav .links a{text-decoration:none;opacity:.75}
+nav .links a:hover{opacity:1}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:999px;font-weight:700;text-decoration:none;font-size:16px;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn-light{background:#fff;color:var(--ink);box-shadow:0 0 0 1px rgba(255,255,255,.2),0 10px 40px rgba(94,230,230,.25)}
+.btn-dark{background:var(--ink);color:#fff}
+.btn-ghost{color:inherit;border:1.5px solid currentColor;opacity:.8}
+.btn-sm{padding:9px 16px;font-size:14px}
+.win{width:16px;height:16px;flex:none}
+
+/* hero */
+.hero{position:relative;overflow:hidden;padding:96px 0 72px}
+.hero::before{content:"";position:absolute;inset:0;background-image:radial-gradient(1.2px 1.2px at 20% 30%,#fff8,transparent),radial-gradient(1px 1px at 70% 20%,#fff6,transparent),radial-gradient(1px 1px at 85% 70%,#fff5,transparent),radial-gradient(1.4px 1.4px at 40% 80%,#fff5,transparent),radial-gradient(1px 1px at 10% 85%,#fff4,transparent),radial-gradient(1px 1px at 55% 45%,#fff3,transparent);pointer-events:none}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.25fr .75fr;align-items:center;gap:40px}
+.hero h1{font-size:clamp(56px,8.6vw,118px)}
+.hero h1 s{text-decoration:none;position:relative;opacity:.55}
+.hero h1 s::after{content:"";position:absolute;left:-2%;right:-2%;top:56%;height:.09em;background:var(--cyan);border-radius:9px;transform:rotate(-3deg)}
+.hero h1 .hand{color:var(--cyan);font-weight:400;letter-spacing:0;display:inline-block;transform:rotate(-4deg) translateY(.06em)}
+.hero p.lead{font-size:20px;max-width:560px;margin:28px 0 36px;color:#c9cde0}
+.cta{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.cta small{display:block;width:100%;margin-top:6px}
+.buddy{position:relative;justify-self:center}
+.buddy img{width:min(340px,70vw);animation:float 5s ease-in-out infinite;filter:drop-shadow(0 20px 40px rgba(120,100,255,.35))}
+.buddy::after{content:"";position:absolute;left:18%;right:18%;bottom:-36px;height:22px;border-radius:50%;background:radial-gradient(rgba(150,120,255,.45),transparent 70%);animation:shadow 5s ease-in-out infinite}
+.bubble{position:absolute;top:-14px;left:-90px;background:#fff;color:var(--ink);border:2.5px solid var(--line);border-radius:14px;padding:10px 18px;font-size:22px;transform:rotate(-5deg);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+@keyframes float{50%{transform:translateY(-16px) rotate(-2deg)}}
+@keyframes shadow{50%{transform:scale(.8);opacity:.6}}
+
+/* film */
+.film{padding:110px 0 120px;background:linear-gradient(var(--night) 0 38%,var(--paper) 38%)}
+.film .head{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:34px;color:var(--snow)}
+.film video{width:100%;border-radius:18px;background:#000;box-shadow:0 40px 90px rgba(11,18,32,.35),0 0 0 1px rgba(0,0,0,.08)}
+
+/* features */
+.feat{padding:90px 0}
+.feat .wrap{display:grid;grid-template-columns:.85fr 1.15fr;gap:64px;align-items:center}
+.feat.flip .wrap{grid-template-columns:1.15fr .85fr}
+.feat.flip .text{order:2}
+.feat .mono{color:#1E7145;display:block;margin-bottom:18px}
+.feat.night .mono{color:var(--cyan)}
+.feat h2{font-size:clamp(38px,5vw,62px);margin-bottom:22px}
+.feat p{font-size:18px;max-width:480px}
+.feat p+p{margin-top:14px}
+.shot{border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 30px 70px rgba(30,25,15,.16),0 0 0 1px rgba(0,0,0,.06)}
+.night .shot{box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08);background:var(--night2)}
+.keys{display:flex;gap:8px;align-items:center;margin:22px 0 0;flex-wrap:wrap;font-size:15px}
+.tilt{transform:rotate(-1.2deg)}
+.tilt2{transform:rotate(1deg)}
+
+/* remember card */
+.remember{position:relative;display:grid;place-items:center;min-height:380px}
+.note{background:#fff;border:2.5px solid var(--line);border-radius:12px;padding:26px 34px;font-size:26px;line-height:1.55;box-shadow:0 20px 50px rgba(0,0,0,.12);transform:rotate(-2deg);min-width:min(420px,100%)}
+.note .t{color:#8a8a8a;display:inline-block;width:76px}
+.note s{text-decoration-color:#1E7145;text-decoration-thickness:2px;opacity:.6}
+.remember img{position:absolute;width:150px;right:2%;bottom:-10px;animation:float 5s ease-in-out infinite}
+
+/* buddies */
+.buddies{padding:120px 0}
+.buddies .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:56px}
+.card{background:var(--night2);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:36px 28px 30px;text-align:center;transition:transform .2s,border-color .2s}
+.card:hover{transform:translateY(-6px);border-color:rgba(201,189,255,.35)}
+.card img{height:200px;width:auto;margin:0 auto 22px;object-fit:contain;filter:drop-shadow(0 14px 30px rgba(120,100,255,.3))}
+.card h3{font-size:34px;margin-bottom:6px}
+.card .tag{display:inline-block;margin-top:14px;color:var(--night);background:var(--cyan);border-radius:99px;padding:4px 12px}
+
+/* privacy */
+.privacy{padding:120px 0;background:var(--paper2)}
+.privacy h2{max-width:900px}
+.privacy .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;margin-top:60px}
+.privacy h3{font-size:22px;letter-spacing:-.01em;margin-bottom:10px}
+.privacy .cols p{font-size:16px}
+
+/* install */
+.install{padding:120px 0}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:56px 0 48px;counter-reset:s}
+.step{border:2.5px solid var(--line);border-radius:14px;background:#fff;padding:28px;position:relative}
+.step::before{counter-increment:s;content:counter(s);font:900 64px/1 Archivo;position:absolute;right:20px;top:14px;opacity:.08}
+.step h3{font-size:24px;margin-bottom:10px;letter-spacing:-.01em}
+.step p{font-size:16px}
+.final{border-radius:26px;padding:64px 48px;display:flex;gap:40px;align-items:center;justify-content:space-between;flex-wrap:wrap;overflow:hidden;position:relative}
+.final h2{font-size:clamp(36px,5vw,58px)}
+.final .hand{color:var(--cyan);font-size:28px;margin-top:10px}
+
+footer{padding:56px 0 64px;font-size:15px}
+footer .wrap{display:flex;gap:40px;justify-content:space-between;flex-wrap:wrap}
+footer .cr{max-width:560px}
+footer .cr p+p{margin-top:10px}
+footer nav{all:unset;display:flex;flex-direction:column;gap:8px}
+footer a{text-decoration:none;border-bottom:1px solid rgba(0,0,0,.2)}
+footer a:hover{border-color:currentColor}
+
+/* Nova cursor, and Nova building the page as you scroll */
+body{cursor:url(assets/cur.png) 3 2,auto}
+a,button,video,.card{cursor:url(assets/cur-hand.png) 3 2,pointer}
+.js [data-b]{opacity:0;transition:opacity .5s ease,transform .6s cubic-bezier(.2,.8,.2,1)}
+.js .txt[data-b]{transition:none}
+.js .vis[data-b]:not(.in){transform:scale(.96)}
+.js [data-b].in{opacity:1}
+.sketch{position:absolute;z-index:40;pointer-events:none;overflow:visible;transition:opacity .5s}
+.sketch rect{fill:none;stroke:var(--cyan);stroke-width:2.5;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(94,230,230,.6))}
+#guide{position:absolute;left:0;top:0;z-index:50;pointer-events:none;opacity:0;transition:opacity .3s}
+#guide.on{opacity:1}
+#guide img{width:72px;margin:-3px 0 0 -5px;transform-origin:5px 3px;filter:drop-shadow(0 8px 16px rgba(80,60,200,.45));transition:transform .2s}
+#guide.rest img{transform:scale(.7)}
+#guide.tap img{transform:scale(.85)}
+.ring{position:absolute;left:-20px;top:-20px;width:40px;height:40px;border-radius:50%;border:3px solid var(--cyan);animation:ring .55s ease-out forwards}
+@keyframes ring{from{transform:scale(.3);opacity:1}to{transform:scale(2.2);opacity:0}}
+.star{position:absolute;z-index:60;pointer-events:none;font-size:20px;line-height:1;animation:burst 1s cubic-bezier(.1,.7,.3,1) forwards}
+@keyframes burst{to{transform:translate(var(--dx),var(--dy)) rotate(var(--r)) scale(.3);opacity:0}}
+.cheer{position:absolute;z-index:55;width:130px;pointer-events:none;animation:cheer 1.8s cubic-bezier(.2,.9,.3,1.3) forwards}
+@keyframes cheer{0%{transform:translate(-50%,-20%) scale(.2);opacity:0}25%{transform:translate(-50%,-115%) scale(1);opacity:1}75%{transform:translate(-50%,-122%) rotate(-6deg);opacity:1}100%{transform:translate(-50%,-90%) scale(.6);opacity:0}}
+.btn.going{background:var(--cyan);color:var(--night);transform:scale(1.06)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,180%);background:var(--ink);color:#fff;padding:14px 22px 14px 14px;border-radius:16px;display:flex;gap:14px;align-items:center;z-index:70;font-size:15px;line-height:1.4;width:max-content;max-width:calc(100% - 32px);box-shadow:0 20px 50px rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.08);transition:transform .55s cubic-bezier(.2,.9,.3,1.2)}
+.toast.show{transform:translate(-50%,0)}
+.toast img{width:48px;flex:none}
+.toast b{display:block;font-size:16px}
+#sound{font:inherit;font-size:14px;background:#fff;color:var(--ink);border:0;border-radius:99px;padding:9px 16px;font-weight:700;display:none}
+#sound.show{display:inline-flex}
+
+@media (max-width:860px){
+  nav .links{display:none}
+  nav .wrap{justify-content:space-between}
+  .hero{padding:56px 0 80px}
+  .hero .wrap,.feat .wrap,.feat.flip .wrap{grid-template-columns:1fr;gap:36px}
+  .feat.flip .text{order:0}
+  .buddy{order:-1}
+  .buddy img{width:200px}
+  .bubble{left:-70px;font-size:18px}
+  .buddies .grid,.privacy .cols,.steps{grid-template-columns:1fr}
+  .film .head{flex-direction:column;align-items:start}
+  .final{padding:40px 26px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.png" alt="">My Buddy</a>
+    <div class="links">
+      <a href="#film">Watch</a><a href="#features">What it does</a><a href="#buddies">Buddies</a><a href="#privacy">Privacy</a><a href="https://github.com/VJNAVEEN2005/my-buddy">GitHub</a>
+    </div>
+    <a class="btn btn-light btn-sm dl" href="https://github.com/VJNAVEEN2005/my-buddy/releases/latest">Download</a>
+  </div>
+</nav>
+
+<header class="hero night" id="top">
+  <div class="wrap">
+    <div>
+      <span class="mono" style="color:var(--cyan)">Free for Windows · open source</span>
+      <h1 style="margin-top:22px">This is your <s>cursor.</s><br><span class="hand">buddy.</span></h1>
+      <p class="lead">A little AI friend that lives on your screen. Ask about anything you see and it flies over and points at the answer. It talks with you, runs errands in your Chrome, and helps you study for the big exam.</p>
+      <div class="cta">
+        <a class="btn btn-light dl" href="https://github.com/VJNAVEEN2005/my-buddy/releases/latest">
+          <svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 0h7.5v7.5H0zM8.5 0H16v7.5H8.5zM0 8.5h7.5V16H0zM8.5 8.5H16V16H8.5z"/></svg>
+          Download for Windows
+        </a>
+        <a class="btn btn-ghost" href="#film">Watch the film · 1:12</a>
+        <small class="mono muted" id="ver">Windows 10 and 11 · 64-bit</small>
+      </div>
+    </div>
+    <div class="buddy">
+      <div class="bubble hand">hi, I'm Nova!</div>
+      <img src="assets/looks/nova-waving.webp" alt="Nova, the default My Buddy character, waving" width="340">
+    </div>
+  </div>
+</header>
+
+<section class="film" id="film">
+  <div class="wrap">
+    <div class="head">
+      <h2>Seventy-two seconds<br>with Nova.</h2>
+      <button id="sound" type="button">🔊 Turn sound on</button>
+    </div>
+    <video src="assets/promo.mp4" poster="assets/poster.jpg" controls preload="metadata" playsinline loop></video>
+  </div>
+</section>
+
+<div id="features"></div>
+<section class="feat">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">01 · Point and ask</span>
+      <h2>Ask.<br>It points.</h2>
+      <p>Stuck in an app again? Put your mouse on it and ask. Nova looks at your screen, flies over to the right button and circles it, then tells you what to click.</p>
+      <div class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd><span class="muted">&nbsp;on any app</span></div>
+    </div>
+    <div class="shot tilt2"><img src="assets/points.jpg" alt="Nova circling the Export button in a spreadsheet app with a note saying Click Export, up here" loading="lazy"></div>
+  </div>
+</section>
+
+<section class="feat flip night">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">02 · Voice</span>
+      <h2>Or just talk.</h2>
+      <p>Hold two keys and speak, or turn on the wake word and say <span class="hand" style="color:var(--cyan)">“Hey Buddy”</span>. Nova talks back in a real voice.</p>
+      <p class="muted">Your speech is turned into text on your own PC, by a speech model that never leaves it.</p>
+      <div class="keys"><span class="muted">Hold&nbsp;</span><kbd>Ctrl</kbd>+<kbd>Alt</kbd><span class="muted">&nbsp;to talk · tap&nbsp;</span><kbd>Ctrl</kbd>+<kbd>Shift</kbd><span class="muted">&nbsp;to type</span></div>
+    </div>
+    <div class="shot"><img src="assets/talk.jpg" alt="Nova answering: What's on my plate tomorrow? Physics lab at 9" loading="lazy"></div>
+  </div>
+</section>
+
+<section class="feat">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">03 · Errands in your Chrome</span>
+      <h2>It does the clicks. And asks before it sends.</h2>
+      <p>With the My Buddy extension on, it works your own signed-in Chrome in a background tab: send an email with your notes, fill a form, cancel a subscription.</p>
+      <p class="muted">Anything risky, like send, pay, cancel or delete, waits for your okay. It never types passwords or card numbers.</p>
+    </div>
+    <div class="shot tilt"><img src="assets/errand.jpg" alt="An errand card asking Okay to send this? next to an email with physics-notes.pdf attached" loading="lazy"></div>
+  </div>
+</section>
+
+<section class="feat flip" style="background:var(--paper2)">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">04 · Explains it</span>
+      <h2>Draws it out for you.</h2>
+      <p>Ask how a cell works, when World War II turned, or how to solve a quadratic. Nova sketches cards right on your desktop: diagrams, timelines, maps, graphs and quick quizzes.</p>
+    </div>
+    <div class="shot"><img src="assets/sketch.jpg" alt="Hand-drawn cards on the desktop: cell biology, water molecule, World War II timeline, quiz, map of India, sine graph" loading="lazy"></div>
+  </div>
+</section>
+
+<section class="feat night">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">05 · Study</span>
+      <h2>Exams? It keeps you on track.</h2>
+      <p>A focus timer that notices when you drift, a daily streak, flashcards that come back on the right day, and quizzes made from your own notes.</p>
+      <p class="muted">Preparing for SSC, UPSC or GATE? Get a daily plan by subject, revision reminders, mock-test scores and a countdown badge to exam day.</p>
+    </div>
+    <div class="shot tilt2"><img src="assets/study.jpg" alt="The My Buddy Study page with a 25 minute focus timer and a 4 day streak" loading="lazy"></div>
+  </div>
+</section>
+
+<section class="feat flip">
+  <div class="wrap">
+    <div class="text">
+      <span class="mono">06 · Memory</span>
+      <h2>It remembers, so you don’t have to.</h2>
+      <p>Tell it once: “remind me every weekday at 9”. It keeps your commitments and what matters to you, and greets you with the day ahead.</p>
+    </div>
+    <div class="remember">
+      <div class="note hand">Good morning ☀<br><span class="t">9:00</span> Physics lab<br><span class="t">4:00</span> Mock test, room 2<br><span class="t">8:00</span> <s>Revise chapter 4</s></div>
+      <img src="assets/looks/nova-thinking.webp" alt="" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section class="buddies night" id="buddies">
+  <div class="wrap">
+    <span class="mono" style="color:var(--cyan)">Companion persona</span>
+    <h2 style="margin-top:18px">Pick your buddy.</h2>
+    <p class="muted" style="margin-top:18px;max-width:600px">Six buddies, each with their own moods: waving, thinking, cheering, sleepy and more. Nova, Peri and Sprout are drawn by Naveen. Swap any time in Companion Persona.</p>
+    <div class="grid">
+      <div class="card"><img src="assets/looks/nova.webp" alt="Nova" loading="lazy"><h3>Nova</h3><p class="muted">A hooded star-kid with a halo. Calm, clever, always pointing the way.</p><span class="tag mono">Default</span></div>
+      <div class="card"><img src="assets/looks/peri.webp" alt="Peri" loading="lazy"><h3>Peri</h3><p class="muted">A soft little ghost in a scarf who floats beside you while you work.</p></div>
+      <div class="card"><img src="assets/looks/sprout.webp" alt="Sprout" loading="lazy"><h3>Sprout</h3><p class="muted">A leafy cat who's mostly curious and a little bit shy.</p></div>
+      <div class="card"><img src="assets/looks/jarvis.webp" alt="Buddy" loading="lazy"><h3>Buddy</h3><p class="muted">The original: a glowing globe of light with a lit heart that ripples when it talks.</p></div>
+      <div class="card"><img src="assets/looks/classic.webp" alt="Pixel" loading="lazy"><h3>Pixel</h3><p class="muted">A squishy pixel blob that bounces around and acts out how it feels.</p></div>
+      <div class="card"><img src="assets/looks/cosmo.webp" alt="Cosmo" loading="lazy"><h3>Cosmo</h3><p class="muted">A nebula slime with sparkly eyes and a little planet in orbit.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="privacy" id="privacy">
+  <div class="wrap">
+    <span class="mono" style="color:#1E7145">Yours, not ours</span>
+    <h2 style="margin-top:18px">Memory stays on your PC. Any AI, even a local one. No tracking.</h2>
+    <div class="cols">
+      <div><h3>Bring your own model</h3><p class="muted">Sign in with Claude or ChatGPT, use an API key (Anthropic, OpenAI, Google, DeepSeek, OpenRouter), or run a local model with Ollama or LM Studio.</p></div>
+      <div><h3>Only where you send it</h3><p class="muted">What you ask, and a screenshot when you ask about your screen, goes only to the AI you picked. Memory and settings stay on your computer.</p></div>
+      <div><h3>Open source</h3><p class="muted">Every line is on GitHub under AGPL-3.0. No analytics, no accounts with us. Read the <a href="https://github.com/VJNAVEEN2005/my-buddy#code-signing-policy">privacy policy</a>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="install" id="install">
+  <div class="wrap">
+    <span class="mono" style="color:#1E7145">Get started</span>
+    <h2 style="margin-top:18px">Up and running in two minutes.</h2>
+    <div class="steps">
+      <div class="step"><h3>Download</h3><p class="muted">Grab the installer for Windows 10 or 11. It installs just for you, no admin needed.</p></div>
+      <div class="step"><h3>Run it</h3><p class="muted">If Windows SmartScreen shows a warning, click <b>More info</b>, then <b>Run anyway</b>. Signing is on its way.</p></div>
+      <div class="step"><h3>Say hi</h3><p class="muted">Pick your AI, choose a buddy, and hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> to say hello.</p></div>
+    </div>
+    <div class="final night">
+      <div>
+        <h2>Meet your buddy.</h2>
+        <p class="hand">a friend on your screen.</p>
+      </div>
+      <a class="btn btn-light dl" href="https://github.com/VJNAVEEN2005/my-buddy/releases/latest">
+        <svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 0h7.5v7.5H0zM8.5 0H16v7.5H8.5zM0 8.5h7.5V16H0zM8.5 8.5H16V16H8.5z"/></svg>
+        Download for Windows
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="cr">
+      <p><b>Made by Naveen VJ.</b> <a href="https://github.com/VJNAVEEN2005">GitHub</a> · <a href="https://vjnaveen.netlify.app/">Portfolio</a></p>
+      <p class="muted">Built on <a href="https://github.com/KenKaiii/Roamies">Roamies</a> by Ken Kai. My Buddy is free software under the <a href="https://github.com/VJNAVEEN2005/my-buddy/blob/main/LICENSE">AGPL-3.0</a> licence; see the <a href="https://github.com/VJNAVEEN2005/my-buddy/blob/main/THIRD_PARTY_NOTICES.md">third-party notices</a>.</p>
+      <p class="muted">To uninstall: Windows Settings › Apps › Installed apps › My Buddy › Uninstall.</p>
+    </div>
+    <nav>
+      <a href="https://github.com/VJNAVEEN2005/my-buddy">Source code</a>
+      <a href="https://github.com/VJNAVEEN2005/my-buddy/releases">All releases</a>
+      <a href="https://github.com/VJNAVEEN2005/my-buddy/issues">Report a bug</a>
+    </nav>
+  </div>
+</footer>
+
+<div id="guide" aria-hidden="true"><img src="assets/cur-big.png" alt=""></div>
+<div class="toast" id="toast" role="status"><img src="assets/looks/nova-cheer.webp" alt=""><span><b>Here comes My Buddy!</b>Open it from your Downloads. If Windows asks, click More info, then Run anyway.</span></div>
+
+<script>
+let version = '';
+// Point every Download button straight at the newest Windows installer; the releases page stays as the fallback.
+fetch('https://api.github.com/repos/VJNAVEEN2005/my-buddy/releases/latest')
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(rel => {
+    const exe = rel.assets.find(a => /\.exe$/i.test(a.name));
+    if (!exe) return;
+    version = rel.tag_name;
+    document.querySelectorAll('a.dl').forEach(a => a.href = exe.browser_download_url);
+    document.getElementById('ver').textContent = `Version ${rel.tag_name} · ${Math.round(exe.size / 1048576)} MB · Windows 10 and 11, 64-bit`;
+  })
+  .catch(() => {});
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const active = () => navigator.userActivation?.hasBeenActive ?? false;
+
+// The film: plays muted when it scrolls into view (browsers only allow sound after you've clicked something).
+const vid = document.querySelector('video'), sound = document.getElementById('sound');
+const syncSound = () => sound.classList.toggle('show', vid.muted && !vid.paused);
+function startVideo() {
+  vid.dataset.started = '1';
+  vid.muted = !active();
+  vid.play().catch(() => { vid.muted = true; return vid.play(); }).catch(() => {}).finally(syncSound);
+}
+sound.onclick = () => { vid.muted = false; vid.play(); syncSound(); };
+vid.addEventListener('volumechange', syncSound);
+vid.addEventListener('play', syncSound);
+new IntersectionObserver(([e]) => {
+  if (!e.isIntersecting) { vid.dataset.resume = vid.paused ? '' : '1'; vid.pause(); }
+  else if (vid.dataset.resume) vid.play().catch(() => {});
+  else if (!vid.dataset.started && (reduce || vid.classList.contains('in'))) startVideo();
+}, { threshold: 0.35 }).observe(vid);
+
+// A little pop when Nova clicks, once you've clicked the page yourself.
+let ac;
+function pop(freq = 900) {
+  if (!active()) return;
+  try {
+    ac ??= new AudioContext();
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+    o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq / 2.2, t + 0.09);
+    g.gain.setValueAtTime(0.07, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.14);
+  } catch {}
+}
+
+// Nova's cursor flies to each section as it scrolls in, clicks, and the section builds itself.
+const guide = document.getElementById('guide'), gimg = guide.querySelector('img');
+const PARTS = '.mono, h1, h2, .lead, .wrap > p, .text > p, .keys, .cta, .head > *, .shot, .remember, .buddy, .card, .cols > div, .step, .final, video';
+const VISUAL = '.shot, .remember, .buddy, .card, .cols > div, .step, .final, video';
+let gx = innerWidth + 120, gy = scrollY + innerHeight * 0.4, pending = 0, queue = Promise.resolve(), restTimer;
+// Moves Nova's cursor along a path of page points.
+async function path(points, ms, easing = 'ease-in-out') {
+  clearTimeout(restTimer); guide.classList.remove('rest'); guide.classList.add('on');
+  const a = guide.animate([[gx, gy], ...points].map(([x, y]) => ({ transform: `translate(${x}px,${y}px)` })), { duration: ms, easing, fill: 'forwards' });
+  [gx, gy] = points.at(-1);
+  await a.finished.catch(() => {});
+  guide.style.transform = `translate(${gx}px,${gy}px)`; a.cancel();
+}
+const place = (x, y, ms) => path([[x, y]], ms);
+const run = (job) => { pending++; queue = queue.then(job).catch(() => {}).finally(() => { pending--; rest(); }); };
+const box = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height }; };
+const fast = () => pending > 1;
+
+async function fly(el, fx = 0.5, fy = 0.5) {
+  const b = box(el), x = b.x + b.w * fx, y = b.y + b.h * fy;
+  await path([[x, y]], fast() ? 140 : Math.min(420, 140 + Math.hypot(x - gx, y - gy) * 0.18));
+}
+// Text: Nova writes it in from left to right.
+async function write(el) {
+  const b = box(el), y = b.y + Math.min(b.h * 0.7, 40);
+  if (!b.w) return el.classList.add('in');
+  await fly(el, 0, Math.min(0.7, 40 / b.h));
+  const ms = fast() ? 140 : Math.min(420, 120 + b.w * 0.3);
+  el.classList.add('in');
+  el.animate([{ clipPath: 'inset(-20% 100% -20% -4%)' }, { clipPath: 'inset(-20% -4% -20% -4%)' }], { duration: ms, easing: 'linear' });
+  await path([[b.x + b.w, y]], ms, 'linear');
+}
+// Pictures and cards: Nova sketches the outline, then the piece settles into it.
+async function draw(el) {
+  const b = box(el), NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg'), rect = document.createElementNS(NS, 'rect');
+  svg.setAttribute('class', 'sketch');
+  Object.assign(svg.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+  for (const [k, v] of Object.entries({ x: 1, y: 1, width: b.w - 2, height: b.h - 2, rx: 16, pathLength: 1, 'stroke-dasharray': 1, 'stroke-dashoffset': 1 })) rect.setAttribute(k, v);
+  svg.append(rect); document.body.append(svg);
+  await fly(el, 0, 0);
+  const ms = fast() ? 240 : Math.min(620, 260 + (b.w + b.h) * 0.2);
+  rect.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ms, easing: 'linear', fill: 'forwards' });
+  await path([[b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h], [b.x, b.y]], ms, 'linear');
+  el.classList.add('in');
+  setTimeout(() => { svg.style.opacity = 0; setTimeout(() => svg.remove(), 500); }, 250);
+}
+async function click(freq) {
+  gimg.src = 'assets/cur-click.png'; guide.classList.add('tap'); pop(freq);
+  const ring = document.createElement('span'); ring.className = 'ring'; guide.append(ring); setTimeout(() => ring.remove(), 600);
+  await wait(170); gimg.src = 'assets/cur-big.png'; guide.classList.remove('tap');
+}
+function rest() {
+  clearTimeout(restTimer);
+  restTimer = setTimeout(() => { if (!pending) { guide.classList.add('rest'); place(scrollX + innerWidth - 80, scrollY + innerHeight - 96, 900); } }, 1400);
+}
+async function build(sec) {
+  const parts = [...sec.querySelectorAll('[data-b]')];
+  // Scrolled past it while Nova was busy elsewhere: just show it.
+  const r = sec.getBoundingClientRect();
+  if (r.bottom < 0 || r.top > innerHeight) { parts.forEach((e) => e.classList.add('in')); return; }
+  const text = parts.filter((e) => !e.matches(VISUAL)), visual = parts.filter((e) => e.matches(VISUAL));
+  for (const t of text) await write(t);
+  for (const v of visual) {
+    await draw(v);
+    if (v === vid) startVideo();
+  }
+}
+
+const sections = [document.querySelector('.hero'), ...document.querySelectorAll('body > section')];
+if (reduce) {
+  // No flying cursor: everything is simply there.
+} else {
+  document.documentElement.classList.add('js');
+  for (const sec of sections) sec.querySelectorAll(PARTS).forEach((e) => {
+    if (e.parentElement.closest('[data-b]')) return;
+    e.dataset.b = ''; e.classList.add(e.matches(VISUAL) ? 'vis' : 'txt');
+  });
+  place(gx, gy, 0);
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) { io.unobserve(e.target); run(() => build(e.target)); }
+  }), { rootMargin: '0px 0px -25% 0px' });
+  sections.forEach((s) => io.observe(s));
+  addEventListener('scroll', () => { if (!pending) rest(); }, { passive: true });
+}
+
+// Download: Nova flies to the button, it bursts with stars, Nova cheers, and the installer starts.
+document.querySelectorAll('a.dl').forEach((a) => a.addEventListener('click', async (ev) => {
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey || a.classList.contains('going')) return;
+  ev.preventDefault();
+  a.closest('[data-b]')?.classList.add('in');
+  const href = a.href, label = a.lastChild.textContent;
+  a.classList.add('going'); a.lastChild.textContent = ' Here it comes!';
+  const r = a.getBoundingClientRect(), cx = r.left + scrollX + r.width / 2, cy = r.top + scrollY + r.height / 2;
+  if (!reduce) {
+    fly(a, 0.85, 0.7, true).then(() => click(1400));
+    const nova = Object.assign(document.createElement('img'), { src: 'assets/looks/nova-cheer.webp', className: 'cheer', alt: '' });
+    Object.assign(nova.style, { left: `${cx}px`, top: `${r.top + scrollY}px` });
+    document.body.append(nova); setTimeout(() => nova.remove(), 1900);
+    for (let i = 0; i < 22; i++) {
+      const s = Object.assign(document.createElement('span'), { className: 'star', textContent: i % 3 ? '✦' : '★' });
+      const ang = Math.random() * Math.PI * 2, d = 70 + Math.random() * 110;
+      s.style.cssText = `left:${cx - 10}px;top:${cy - 10}px;color:${['#5EE6E6', '#C9BDFF', '#fff'][i % 3]};--dx:${Math.cos(ang) * d}px;--dy:${Math.sin(ang) * d}px;--r:${Math.random() * 360}deg`;
+      document.body.append(s); setTimeout(() => s.remove(), 1100);
+    }
+  }
+  const toast = document.getElementById('toast');
+  if (version) toast.querySelector('b').textContent = `Here comes My Buddy ${version}!`;
+  setTimeout(() => { toast.classList.add('show'); location.href = href; }, reduce ? 0 : 900);
+  setTimeout(() => { toast.classList.remove('show'); a.classList.remove('going'); a.lastChild.textContent = label; }, 7000);
+}));
+</script>
+</body>
+</html>
