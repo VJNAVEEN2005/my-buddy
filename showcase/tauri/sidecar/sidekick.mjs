@@ -69,6 +69,7 @@ import { lookLine, lookSeen } from './looknote.mjs';
 import { leanTools } from './lean.mjs';
 import { z } from 'zod';
 import { studyState } from './study.mjs';
+import { examView, findExam, listExams, markTopics, removeExam } from './exams.mjs';
 import { dropReplay, findReplay, keepReplay, listReplays, replayCount, replayable, usedReplay } from './replays.mjs';
 import { getAcademicData, projectGpa, updateAssignment } from './academic-store.mjs';
 
@@ -645,6 +646,7 @@ const userName = (() => {
 let turnVoice = null;
 const { tools, hands, whereNow, frontNow: frontData, frontBounds, ink, nextTurn, replay: replayDraw } = createTools({
   // A walkthrough finished: offer to keep its steps for a replay with no model call (replays.mjs).
+  onExams: () => menu(),
   onWalk: (args) => { if (replaying || !turnWords || !replayable(args)) return; const words = turnWords; frontData().then((f) => offerKeep(f?.app, words, args)).catch(() => {}); },
   focus: HANDS_OK ? { start: (m, t) => startFocus(m, t), stop: () => stopFocus() } : null,
   firedReminders: () => firedReminders,
@@ -2231,8 +2233,13 @@ async function saveDiagnostics() {
 
 // The right-click menu: the basics. Everything else (memory, model, settings, updates) is in the panel.
 // The Study page's data from the Academic Hub; null if the hub can't be read.
+// Exams (exams.mjs) ride along: competitive exam prep is on the same page, so the page is empty only when both are.
 function studyNow() {
-  try { return studyState(getAcademicData(), projectGpa()); } catch (e) { console.error('study', e); return null; }
+  let s = null, exams = [];
+  try { s = studyState(getAcademicData(), projectGpa()); } catch (e) { console.error('study', e); }
+  try { exams = listExams().map((x) => examView(x)); } catch (e) { console.error('exams', e); }
+  if (!s && !exams.length) return null;
+  return s ? { ...s, empty: s.empty && !exams.length, uniEmpty: s.empty, exams } : { empty: false, uniEmpty: true, today: [], upcoming: [], courses: [], calendar: [], map: { courses: [], tasks: [] }, gpa: null, exams };
 }
 // Kept walkthroughs (replays.mjs). offerKeep: after one finishes; tryReplay: before a request goes to the model.
 let replaying = false;
@@ -2520,6 +2527,11 @@ async function onMenu(id, via) {
     if (ok?.trim().toUpperCase() === 'FORGET') { const n = await clearFacts(); menu(); say(`Done. I forgot ${n} thing${n === 1 ? '' : 's'} about you.`, 'concerned'); }
   } else if (id.startsWith('replay:forget:')) {
     dropReplay(id.slice(14)).then(() => menu()).catch((e) => console.error('replay forget', e));
+  } else if (id.startsWith('exam:done:') || id.startsWith('exam:rev:')) {
+    const [, how, xid, tid] = id.split(':'), x = findExam(xid);
+    if (x) markTopics(x, [tid], how === 'rev' ? 'revised' : 'done').then(() => menu()).catch((e) => console.error('exam topic', e));
+  } else if (id.startsWith('exam:forget:')) {
+    removeExam(id.slice(12)).then(() => menu()).catch((e) => console.error('exam forget', e));
   } else if (id.startsWith('study:done:')) {
     updateAssignment(id.slice(11), { status: 'completed' }).then(() => menu()).catch((e) => console.error('study done', e));
   } else if (id.startsWith('done:') || id.startsWith('drop:')) {

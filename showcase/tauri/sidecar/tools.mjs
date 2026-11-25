@@ -17,6 +17,7 @@ import { snoozeTarget, snoozeUntil } from './snooze.mjs';
 import { addJob, getJob, jobsText, removeJob, updateJob } from './jobs.mjs';
 import { browserTools } from './browser.mjs';
 import { createAcademicTools } from './academic-tools.mjs';
+import { createExamTools } from './exams.mjs';
 import { deleteSkill, fetchSkills, installSkill, listSkills, readSkill, readSkillFile, saveSkill, screenSkill, skillFiles } from './skills.mjs';
 
 const HOME = os.homedir();
@@ -251,7 +252,7 @@ export function oneYesNoAtATime(ask) {
   };
 }
 
-export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'My Buddy isn\'t running.' }), workdir = HOME, own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, jobs = null, skills = null, browser = null, callModel = null, onWalk = () => {} }) {
+export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'My Buddy isn\'t running.' }), workdir = HOME, own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, jobs = null, skills = null, browser = null, callModel = null, onWalk = () => {}, onExams = () => {} }) {
   // Relative paths (and run_command) start in workdir: ~/Roamies for the chat, its own folder for an agent.
   const at = (p) => { const s = String(p ?? ''); return /^~(?=$|\/|\\)/.test(s) || path.isAbsolute(s) || /^[a-z]:[\\/]/i.test(s) ? s : path.join(workdir, s); };
   const where = workdir === HOME ? "the user's home folder" : `its working folder (${workdir})`;
@@ -1176,6 +1177,7 @@ A drawing stays until it's cleared, the window changes or the next one replaces 
     }] : []),
     ...(browser ? browserTools({ browser, confirm, userName }) : []),
     ...createAcademicTools({ openUrl, callModel, userName }),
+    ...createExamTools({ changed: onExams }),
   ];
 
   // What's in front, for the live state. Quick and never fails: '' if the helper is missing, slow or denied.

@@ -460,11 +460,12 @@
   // ---------------------------------------------------------------- Study
   // The Academic Hub on one page: what's due, each course, the next 30 days and the GPA. Filled by the syllabus
   // and calendar tools ("read my syllabus", "import my calendar"); Done marks a deliverable finished.
-  const STUDY_TABS = [['today', 'Today'], ['map', 'Map'], ['courses', 'Courses'], ['calendar', 'Calendar'], ['gpa', 'GPA']];
+  const STUDY_TABS = [['today', 'Today'], ['exams', 'Exams'], ['map', 'Map'], ['courses', 'Courses'], ['calendar', 'Calendar'], ['gpa', 'GPA']];
   function studyPage() {
     const s = state.study, t = pageTab('study', STUDY_TABS);
     const head = el('div', { className: 'mhead' }, tabRow('Study', 'st-panel', STUDY_TABS, t, (id) => { ui.tabs.study = id; }));
-    if (!s || s.empty) return [head, tabPanel('st-panel', t, group(null, 'Nothing here yet. Ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file, and your courses and deadlines show up here.', null))];
+    if (t === 'exams') return [head, ...examsTab(s?.exams ?? [], t)];
+    if (!s || (s.uniEmpty ?? s.empty) && !(t === 'today' && s.exams?.length)) return [head, tabPanel('st-panel', t, group(null, 'Nothing here yet. Ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file, and your courses and deadlines show up here. Preparing for a competitive exam? See the Exams tab.', null))];
     const due = (r) => el('li', { className: 'item mem' },
       el('span', { className: 'text', dir: 'auto', title: r.title }, r.course ? `${r.course} · ${r.title}` : r.title,
         el('small', { className: r.overdue ? 'late' : '', textContent: r.overdue ? `Overdue · ${r.when}` : r.when })),
@@ -493,8 +494,55 @@
     const list = [...s.today, ...s.upcoming];
     const { box, nav } = paged('study-today', list, due, { label: 'Due soon', empty: 'Nothing due in the next two weeks. Nice.' });
     const late = s.today.filter((r) => r.overdue).length;
-    return [head, tabPanel('st-panel', t, el('div', { className: 'group paged' }, box)),
+    // Exam prep for today sits above the deadlines: each exam's topics for today, ticked off here too.
+    const prep = (s.exams ?? []).filter((x) => x.today.length).map((x) => group(x.name, examLine(x), null,
+      el('ul', { className: 'list', 'aria-label': `${x.name}: today` }, x.today.map((tp) => topicRow(x, tp, 'done')))));
+    return [head, tabPanel('st-panel', t, ...prep, el('div', { className: 'group paged' }, box)),
       foot(el('p', { className: 'usage', textContent: `${s.today.length} due today${late ? ` (${late} overdue)` : ''} · ${s.upcoming.length} in the next two weeks` }), nav)];
+  }
+  // ---- Exams: competitive and entrance exam prep (exams.mjs). One exam at a time: the countdown, how far through the
+  // syllabus each subject is, today's topics at the pace the days left need, revision, and the mock test trend.
+  const examLine = (x) => [x.daysLeft == null ? 'No date set' : x.daysLeft < 0 ? 'Exam date passed' : x.daysLeft === 0 ? 'Exam today' : `${x.daysLeft} day${x.daysLeft === 1 ? '' : 's'} left`, `${x.done}/${x.total} topics`, x.total > x.done && `${x.perDay} a day`].filter(Boolean).join(' · ');
+  const topicRow = (x, tp, how) => el('li', { className: 'item mem' },
+    el('span', { className: 'text', dir: 'auto', title: tp.name }, tp.name, el('small', { textContent: how === 'rev' ? `${tp.subject} · due for revision` : tp.status === 'learning' ? `${tp.subject} · started` : tp.subject })),
+    el('span', { className: 'row-btns icons' }, iconArmed('tick', how === 'rev' ? 'Revised' : 'Done', `exam:${how}:${x.id}:${tp.id}`, `exam:${how}:${x.id}:${tp.id}`, `${how === 'rev' ? 'Revised' : 'Done'}: ${tp.name}`)));
+  function mockSpark(mocks) {
+    const pts = mocks.filter((m) => m.pct != null), esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    if (pts.length < 2) return null;
+    const W = 220, H = 44, lo = Math.max(0, Math.min(...pts.map((m) => m.pct)) - 5), hi = Math.min(100, Math.max(...pts.map((m) => m.pct)) + 5);
+    const xy = pts.map((m, i) => [Math.round((i / (pts.length - 1)) * (W - 8) + 4), Math.round(H - 4 - ((m.pct - lo) / Math.max(1, hi - lo)) * (H - 8))]);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'mock-spark'); svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `Mock scores: ${pts.map((m) => `${m.pct}%`).join(', ')}`);
+    svg.innerHTML = `<polyline points="${xy.map((p) => p.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>${xy.map(([a, b], i) => `<circle cx="${a}" cy="${b}" r="${i === xy.length - 1 ? 3 : 2}"><title>${esc(pts[i].name || 'Mock')}: ${pts[i].score}/${pts[i].total} (${pts[i].pct}%)</title></circle>`).join('')}`;
+    return svg;
+  }
+  function examsTab(exams, t) {
+    if (!exams.length) return [tabPanel('st-panel', t, group(null, 'Preparing for UPSC, TNPSC, SSC, banking, GATE, CAT, NEET, JEE or a placement test? Tell me which exam and when, like “I’m writing SSC CGL on 2027-06-14”. I’ll set out the syllabus by subject, give you a daily plan that leaves time to revise, and track your mock scores here.', null))];
+    const x = exams.find((e) => e.id === ui.exam) ?? exams[0];
+    const pick = exams.length > 1 ? el('div', { className: 'exam-pick', role: 'group', 'aria-label': 'Exam' }, exams.map((e) => el('button', {
+      className: 'chip', type: 'button', 'aria-pressed': String(e.id === x.id), 'data-k': `exam-${e.id}`, textContent: e.name,
+      on: { click: () => { ui.exam = e.id; render(`exam-${e.id}`); } },
+    }))) : null;
+    const stat = (b, label) => el('div', {}, el('b', { textContent: b }), el('span', { textContent: label }));
+    const pct = x.total ? Math.round((x.done / x.total) * 100) : 0;
+    const stats = el('div', { className: 'study-stats' },
+      stat(x.daysLeft == null ? '–' : String(Math.max(0, x.daysLeft)), x.daysLeft === 1 ? 'Day left' : 'Days left'),
+      stat(`${pct}%`, `Syllabus (${x.done}/${x.total})`),
+      stat(x.mockLast == null ? '–' : `${x.mockLast}%`, x.mockChange == null ? 'Last mock' : `Last mock (${x.mockChange >= 0 ? '+' : ''}${x.mockChange})`));
+    const subjects = el('ul', { className: 'subj', 'aria-label': 'Subjects' }, x.subjects.map((sb) => el('li', {},
+      el('span', { className: 'subj-name', dir: 'auto', textContent: sb.name }),
+      el('span', { className: 'subj-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${sb.total ? Math.round((sb.done / sb.total) * 100) : 0}%` })),
+      el('span', { className: 'subj-n', textContent: `${sb.done}/${sb.total}` }))));
+    const when = x.date ? new Date(`${x.date}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'no date yet';
+    const spark = mockSpark(x.mocks);
+    return [tabPanel('st-panel', t, pick,
+      group(x.name, `${when}${x.target ? ` · target ${x.target}` : ''}`, null, stats, subjects),
+      group('Today', x.total === x.done ? 'Whole syllabus done. Mocks and revision now.' : `${x.perDay} new topic${x.perDay === 1 ? '' : 's'} a day keeps you on track, with time left to revise.`, x.today.length || null,
+        x.today.length ? el('ul', { className: 'list', 'aria-label': 'Today' }, x.today.map((tp) => topicRow(x, tp, 'done'))) : null),
+      x.revise.length ? group('Revise', 'Finished a week or more ago.', x.revise.length, el('ul', { className: 'list', 'aria-label': 'Revise' }, x.revise.map((tp) => topicRow(x, tp, 'rev')))) : null,
+      group('Mock tests', x.mocks.length ? `Average ${x.mockAvg}% over ${x.mocks.length}${x.target ? ` · target ${x.target}` : ''}. Tell me a score to add one, like “got 142 out of 200 in today’s mock”.` : 'None yet. Tell me a score after each mock, like “got 142 out of 200”, and the trend shows here.', null, spark)),
+      foot(el('p', { className: 'usage', textContent: examLine(x) }), el('span', { className: 'row-btns icons' }, iconArmed('x', 'Stop tracking', `exam:forget:${x.id}`, `exam:forget:${x.id}`, `Stop tracking ${x.name}`)))];
   }
   // The course map: each course with its open deliverables around it, drawn as a graph. Drag any node to move it;
   // where things were put is kept on this computer (the panel's own storage), so the map stays as arranged.
@@ -1603,6 +1651,8 @@
       map: { courses: [{ id: 'c1', label: 'CS 101', name: 'Intro to Computer Science' }, { id: 'c2', label: 'MATH 120', name: 'Calculus I' }],
         tasks: [{ id: 'a1', label: 'Lab 3 report', course: 'c1', when: 'Yesterday', overdue: true }, { id: 'a3', label: 'Project proposal', course: 'c1', when: 'Mon 30 Nov' }, { id: 'a6', label: 'Lab 4', course: 'c1', when: 'Fri 4 Dec' }, { id: 'a2', label: 'Quiz 2', course: 'c2', when: 'Today' }, { id: 'a4', label: 'Problem set 6', course: 'c2', when: 'Wed 2 Dec' }] },
       gpa: { now: 3.52, projected: 3.45, credits: 7, courses: [{ code: 'CS 101', name: 'Intro to Computer Science', credits: 4, now: 'A-', nowPct: 91.2, projected: 'A-', projectedPct: 90, graded: 3, total: 8 }, { code: 'MATH 120', name: 'Calculus I', credits: 3, now: 'B+', nowPct: 88, projected: 'B', projectedPct: 85, graded: 2, total: 6 }] } };
+    // Two exams being prepared for (exams.mjs's examView, worked out for 25 Nov 2026).
+    s.study.exams = [{"id":"x1","name":"SSC CGL 2027","date":"2027-06-14","daysLeft":201,"target":"160+ in Tier 1","done":8,"total":29,"subjects":[{"name":"Quantitative Aptitude","done":3,"total":10},{"name":"Reasoning","done":3,"total":7},{"name":"English","done":2,"total":6},{"name":"General Awareness","done":0,"total":6}],"perDay":1,"today":[{"id":"t3","name":"Simple and compound interest","subject":"Quantitative Aptitude","status":"learning"}],"revise":[{"id":"t0","name":"Number system","subject":"Quantitative Aptitude"},{"id":"t1","name":"Percentages","subject":"Quantitative Aptitude"}],"mocks":[{"id":"m0","at":1793008800000,"score":118,"total":200,"pct":59,"name":"Mock 1"},{"id":"m1","at":1793527200000,"score":126,"total":200,"pct":63,"name":"Mock 2"},{"id":"m2","at":1794045600000,"score":123,"total":200,"pct":61.5,"name":"Mock 3"},{"id":"m3","at":1794564000000,"score":134,"total":200,"pct":67,"name":"Mock 4"},{"id":"m4","at":1795082400000,"score":141,"total":200,"pct":70.5,"name":"Mock 5"}],"mockAvg":64.2,"mockLast":70.5,"mockChange":3.5},{"id":"x2","name":"TCS placement","date":"2026-12-20","daysLeft":25,"target":null,"done":0,"total":6,"subjects":[{"name":"Technical","done":0,"total":4},{"name":"Aptitude","done":0,"total":2}],"perDay":1,"today":[{"id":"u0","name":"Data structures","subject":"Technical","status":"todo"}],"revise":[],"mocks":[],"mockAvg":null,"mockLast":null,"mockChange":null}];
     if (q.has('busy')) Object.assign(s, { busy: true, status: { state: 'busy', text: 'Reading notes.md' } });
     if (q.has('empty')) Object.assign(s, { recent: [], facts: [], commitments: [], jobs: [], skills: [], connections: [], usage: null, study: { empty: true } });
     if (q.has('many')) {
