@@ -24,7 +24,7 @@
     "@kenkaiiii/gg-core": "5.105.0",
     "@kenkaiiii/ggcoder": "5.105.0",
     "mammoth": "^1.13.0",
-    "unpdf": "^1.9.1",
+    "unpdf": "^2.2.1",
     "ws": "8.23.0",
     "zod": "4.6.7"
   },
