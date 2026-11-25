@@ -36,6 +36,25 @@ TAURI_BUNDLES=nsis ./build.sh     # installer in src-tauri/target/release/bundle
 
 Updates are off: My Buddy has no update feed of its own yet (see `update()` in `src-tauri/src/main.rs`).
 
+## Download
+
+Windows installers are on the [Releases](https://github.com/VJNAVEEN2005/my-buddy/releases) page. To uninstall, use
+Windows Settings > Apps > Installed apps > My Buddy > Uninstall.
+
+## Code signing policy
+
+Windows releases are signed so Windows doesn't warn about an unknown app (signing applied for, not active yet).
+
+- Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+- Committers and reviewers: [Naveen VJ (@VJNAVEEN2005)](https://github.com/VJNAVEEN2005)
+- Approvers: [Naveen VJ (@VJNAVEEN2005)](https://github.com/VJNAVEEN2005)
+
+**Privacy policy:** My Buddy sends what you ask it (and a screenshot, when you ask about your screen) only to the AI
+provider you pick in its settings (for example Anthropic, OpenAI, Google, DeepSeek or OpenRouter, or a local model
+that never leaves your computer) and to the voice service you turn on (Fish Audio or Gemini). It opens the websites you
+ask it to, downloads its speech model from Hugging Face once, and syncs memory only through a folder you choose. It
+sends nothing anywhere else, keeps your memory and settings on your computer, and has no analytics or tracking.
+
 ## Author
 
 Made by **Naveen VJ**: [GitHub @VJNAVEEN2005](https://github.com/VJNAVEEN2005) ·
