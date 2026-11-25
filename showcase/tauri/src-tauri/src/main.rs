@@ -108,6 +108,8 @@ fn to_overlays(app: &AppHandle, msg: &Value) {
     let js = format!("window.__roamieHost&&__roamieHost({msg})");
     for (label, w) in app.webview_windows() {
         if is_overlay(&label) {
+            #[cfg(target_os = "windows")]
+            win32_bring_to_top(&w);
             let _ = w.eval(&js);
         }
     }
@@ -235,17 +237,41 @@ fn other_input_down() -> bool {
     false
 }
 
-/// Windows: leaves an overlay out of every capture, so Roamies never shows up in its own screenshots, area snaps
-/// or the pictures it reads text from.
+/// Windows: ensures a window is brought to the top of the z-order above every application.
 #[cfg(target_os = "windows")]
-fn exclude_from_capture(w: &WebviewWindow) {
+pub(crate) fn win32_bring_to_top(w: &WebviewWindow) {
     #[link(name = "user32")]
     extern "system" {
-        fn SetWindowDisplayAffinity(hwnd: isize, affinity: u32) -> i32;
+        fn SetWindowPos(
+            hwnd: isize,
+            hwnd_insert_after: isize,
+            x: i32,
+            y: i32,
+            cx: i32,
+            cy: i32,
+            flags: u32,
+        ) -> i32;
+        fn BringWindowToTop(hwnd: isize) -> i32;
     }
-    // WDA_EXCLUDEFROMCAPTURE (Windows 10 2004 and later).
+    const HWND_TOPMOST: isize = -1;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOACTIVATE: u32 = 0x0010;
+    const SWP_SHOWWINDOW: u32 = 0x0040;
     if let Ok(h) = w.hwnd() {
-        unsafe { SetWindowDisplayAffinity(h.0 as isize, 0x11) };
+        let hwnd = h.0 as isize;
+        unsafe {
+            BringWindowToTop(hwnd);
+            SetWindowPos(
+                hwnd,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            );
+        }
     }
 }
 
@@ -261,6 +287,10 @@ fn set_hot(window: WebviewWindow, hot: bool) {
     let hot = hot && !fullscreen::GAME.load(Ordering::Relaxed);
     OVERLAY_HOT.store(hot, Ordering::Relaxed);
     let _ = window.set_ignore_cursor_events(!hot);
+    #[cfg(target_os = "windows")]
+    if hot {
+        win32_bring_to_top(&window);
+    }
 }
 
 /// Linux: the parts of this overlay that take clicks, as [x, y, w, h, …] in CSS px (host.js). Everything else
@@ -339,6 +369,8 @@ fn set_typing(app: AppHandle, window: WebviewWindow, on: bool) {
     let _ = was;
     if on {
         let _ = window.set_focus();
+        #[cfg(target_os = "windows")]
+        win32_bring_to_top(&window);
         #[cfg(target_os = "linux")]
         if !linux::unmanaged_overlay() {
             linux::activate(&window);
@@ -698,27 +730,27 @@ fn intro_at_tray(app: &AppHandle, tray: Option<tauri::Rect>, text: &str) {
 
 // ---------- menu bar icon ----------
 
-/// The "Wave" icon: the Sidekick waving a floating mitt, as a 12×12 LED grid.
+/// The Buddy icon: a round orb with two eyes, as a 12×12 grid.
 const TRAY_ART: [&str; 12] = [
     "............",
-    "..........#.",
-    ".........###",
-    "..........#.",
-    "..####......",
-    ".######.....",
-    "##.##.##....",
-    "##.##.##....",
-    "########....",
-    ".######.....",
-    "..####......",
-    "............",
+    "....####....",
+    "..########..",
+    ".##########.",
+    ".##########.",
+    "###.####.###",
+    "###.####.###",
+    "############",
+    ".##########.",
+    ".##########.",
+    "..########..",
+    "....####....",
 ];
 
-/// Renders the grid as LED dots (2 px on a 3 px pitch, 36 px = 18 pt at 2x). Black on transparent, used
+/// Renders the grid as solid 3 px cells (36 px = 18 pt at 2x). Black on transparent, used
 /// as a template image so macOS tints it for light, dark and highlighted menu bars.
 fn tray_image() -> tauri::image::Image<'static> {
     const PITCH: usize = 3;
-    const DOT: usize = 2;
+    const DOT: usize = 3;
     let n = TRAY_ART.len() * PITCH;
     let mut rgba = vec![0u8; n * n * 4];
     for (y, row) in TRAY_ART.iter().enumerate() {
@@ -740,8 +772,8 @@ fn tray_image() -> tauri::image::Image<'static> {
 // ---------- panel ----------
 
 // Wide enough for the sidebar beside a page as roomy as the old one-column panel.
-const PANEL_W: f64 = 560.0;
-const PANEL_H: f64 = 560.0;
+const PANEL_W: f64 = 860.0;
+const PANEL_H: f64 = 600.0;
 
 /// Plays the panel's close animation, then hides it (unless it was opened again meanwhile). why: what closed it,
 /// for the log (blur, icon, esc, panel).
@@ -769,7 +801,7 @@ pub(crate) fn hide_panel(app: &AppHandle, why: &'static str) {
 
 /// Opens the panel by the icon (or closes it if it's open). `toggle`: false from the menu's Open Panel, which
 /// only opens. The icon's rect comes with a click; from the menu, it's asked for.
-fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
+pub(crate) fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
     let existing = app.get_webview_window(PANEL_LABEL);
     if let Some(w) = &existing {
         if w.is_visible().unwrap_or(false) {
@@ -778,13 +810,21 @@ fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
             if toggle || !closing {
                 if toggle && !closing {
                     hide_panel(app, "icon");
+                } else if !closing {
+                    let _ = w.unminimize();
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                    activate_window(app, PANEL_LABEL);
                 }
                 return;
             }
             PANEL_GEN.fetch_add(1, Ordering::SeqCst);
             PANEL_CLOSING.store(false, Ordering::SeqCst);
             let _ = w.eval(panel_open_js());
+            let _ = w.unminimize();
+            let _ = w.show();
             let _ = w.set_focus();
+            activate_window(app, PANEL_LABEL);
             return;
         }
     }
@@ -795,34 +835,49 @@ fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
     let w = match existing {
         Some(w) => w,
         None => {
+            #[cfg(target_os = "windows")]
             let b = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("panel/index.html".into()))
-                .title("Roamies")
+                .title("My Buddy")
                 .inner_size(PANEL_W, PANEL_H)
-                .resizable(false)
-                .maximizable(false)
+                .resizable(true)
+                .maximizable(true)
+                .minimizable(true)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(false)
+                .transparent(false)
+                .shadow(false)
+                .visible(false);
+
+            #[cfg(not(target_os = "windows"))]
+            let b = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("panel/index.html".into()))
+                .title("My Buddy")
+                .inner_size(PANEL_W, PANEL_H)
+                .resizable(true)
+                .maximizable(true)
                 .minimizable(false)
                 .decorations(false)
-                // macOS: the first click acts even while another app is active, instead of only activating Roamies.
                 .accept_first_mouse(true)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .visible_on_all_workspaces(true)
-                // Transparent, so it opens and closes as its own shape (panel.css draws the frame).
-                // No native shadow: macOS works it out from the drawn pixels and would trail the animation.
                 .transparent(true)
                 .shadow(false)
                 .visible(false);
+
             match b.build() {
                 Ok(w) => {
                     #[cfg(target_os = "macos")]
-                    over_fullscreen(&w);
-                    let app2 = app.clone();
-                    w.on_window_event(move |e| {
-                        if let tauri::WindowEvent::Focused(false) = e {
-                            *PANEL_BLURRED.lock().unwrap() = Some(Instant::now());
-                            hide_panel(&app2, "blur");
-                        }
-                    });
+                    {
+                        over_fullscreen(&w);
+                        let app2 = app.clone();
+                        w.on_window_event(move |e| {
+                            if let tauri::WindowEvent::Focused(false) = e {
+                                *PANEL_BLURRED.lock().unwrap() = Some(Instant::now());
+                                hide_panel(&app2, "blur");
+                            }
+                        });
+                    }
                     w
                 }
                 Err(e) => {
@@ -837,14 +892,17 @@ fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
     PANEL_GEN.fetch_add(1, Ordering::SeqCst);
     PANEL_CLOSING.store(false, Ordering::SeqCst);
     let _ = w.eval(panel_open_js());
+    let _ = w.unminimize();
     let _ = w.show();
+    let _ = w.set_always_on_top(true);
     let _ = w.set_focus();
+    #[cfg(target_os = "windows")]
+    win32_bring_to_top(&w);
     activate_window(app, PANEL_LABEL);
     to_sidecar(app, &json!({ "type": "panel_open" }));
 }
 
-/// Right under the icon in the menu bar (macOS, or a taskbar at the top), right above it in a taskbar at the
-/// bottom (Windows), kept inside the screen's usable area. True when it's above the icon.
+/// Expands to cover the full screen of the active monitor.
 fn place_panel(app: &AppHandle, w: &WebviewWindow, rect: Option<tauri::Rect>) -> bool {
     let icon = rect.map(|r| {
         let p = r.position.to_physical::<f64>(1.0);
@@ -857,25 +915,15 @@ fn place_panel(app: &AppHandle, w: &WebviewWindow, rect: Option<tauri::Rect>) ->
         Some((x, y, iw, ih)) => app.monitor_from_point((x + iw / 2.0) / k, (y + ih / 2.0) / k).ok().flatten(),
         None => None,
     }
+    .or_else(|| app.cursor_position().ok().and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten()))
     .or_else(|| app.primary_monitor().ok().flatten());
     let Some(m) = monitor else { return false };
     let s = m.scale_factor();
-    let wa = m.work_area();
-    let (ax, ay, aw, ah) = (wa.position.x as f64, wa.position.y as f64, wa.size.width as f64, wa.size.height as f64);
-    let gap = 6.0 * s;
-    let margin = 8.0 * s;
-    let h = (PANEL_H * s).min(ah - 2.0 * margin);
-    let pw = PANEL_W * s;
-    set_panel_size(w, pw, h, s);
-    let (cx, y, above) = match icon {
-        Some((x, y, iw, ih)) if y + ih / 2.0 < ay + ah / 2.0 => (x + iw / 2.0, (y + ih).max(ay) + gap, false),
-        Some((x, y, iw, _)) => (x + iw / 2.0, y.min(ay + ah) - h - gap, true),
-        None => (ax + aw - pw / 2.0 - margin, ay + gap, false),
-    };
-    let x = (cx - pw / 2.0).clamp(ax + margin, (ax + aw - pw - margin).max(ax + margin));
-    let y = y.clamp(ay + margin.min(gap), (ay + ah - h - margin).max(ay));
-    set_panel_position(w, x, y, s);
-    above
+    let (mx, my) = (m.position().x as f64, m.position().y as f64);
+    let (mw, mh) = (m.size().width as f64, m.size().height as f64);
+    set_panel_size(w, mw, mh, s);
+    set_panel_position(w, mx, my, s);
+    false
 }
 
 // macOS converts physical sizes with the scale of the screen the window is on now, not the one it's going to,
@@ -954,7 +1002,7 @@ fn open_onboarding(app: &AppHandle, mode: Option<&str>) {
     }
     let url = if chat { "onboarding/index.html?mode=chat" } else { "onboarding/index.html" };
     let mut b = WebviewWindowBuilder::new(app, ONBOARDING_LABEL, WebviewUrl::App(url.into()))
-        .title(if chat { "Get to know you" } else { "Welcome to Roamies" })
+        .title(if chat { "Get to know you" } else { "Welcome to My Buddy" })
         .inner_size(780.0, 540.0)
         .resizable(false)
         .maximizable(false)
@@ -1010,6 +1058,16 @@ fn activate_window(app: &AppHandle, label: &str) {
             let ns_app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
             let _: () = msg_send![ns_app, activateIgnoringOtherApps: Bool::YES];
         });
+    }
+    #[cfg(windows)]
+    {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_always_on_top(true);
+            let _ = w.set_focus();
+            win32_bring_to_top(&w);
+        }
     }
     let _ = (app, label);
 }
@@ -1108,6 +1166,8 @@ fn move_sidekick_to(app: &AppHandle, x: f64, y: f64) {
         fix_overlay_size(&w, size);
         let _ = w.set_size(size);
     }
+    #[cfg(target_os = "windows")]
+    win32_bring_to_top(&w);
     let _ = w.eval(safe_js(&mon));
     let _ = w.eval("window.__roamieMoved&&__roamieMoved()");
 }
@@ -1159,7 +1219,7 @@ fn build_overlays(app: &AppHandle) -> tauri::Result<()> {
         #[cfg(not(target_os = "linux"))]
         let unmanaged = false;
         let b = WebviewWindowBuilder::new(app, label, WebviewUrl::App("desktop.html".into()))
-            .title("Roamies")
+            .title("My Buddy")
             .visible(!unmanaged)
             .transparent(true)
             .decorations(false)
@@ -1193,7 +1253,9 @@ fn build_overlays(app: &AppHandle) -> tauri::Result<()> {
         #[cfg(target_os = "macos")]
         over_fullscreen(&w);
         #[cfg(target_os = "windows")]
-        exclude_from_capture(&w);
+        {
+            win32_bring_to_top(&w);
+        }
     }
     Ok(())
 }
@@ -1622,8 +1684,8 @@ fn fallback_menu(app: &AppHandle, status: &str) {
     set_menu(app, &[
         json!({ "id": "status", "label": status, "enabled": false }),
         json!({ "sep": true }),
-        json!({ "id": "restart", "label": "Restart Roamies" }),
-        json!({ "id": "quit", "label": "Quit Roamies" }),
+        json!({ "id": "restart", "label": "Restart My Buddy" }),
+        json!({ "id": "quit", "label": "Quit My Buddy" }),
     ]);
 }
 
@@ -1729,7 +1791,12 @@ fn login_item(app: &AppHandle, set: Option<bool>) {
 
 /// Checks the signed update feed (latest.json on the newest GitHub release). With `install`, downloads,
 /// verifies the signature, swaps the app in place and restarts. Progress goes to the sidecar as update_status.
+#[allow(unreachable_code, unused_variables)]
 fn update(app: &AppHandle, install: bool) {
+    // ponytail: My Buddy has no update feed yet, and the Roamies feed would install Roamies over it. Point
+    // plugins.updater at your own signed latest.json and delete these two lines to switch updates back on.
+    to_sidecar(app, &json!({ "type": "update_status", "state": "none" }));
+    return;
     use tauri_plugin_updater::UpdaterExt;
     let app = app.clone();
     // Linux: only an AppImage can swap itself in place. A copy from a .deb or .rpm is told about the new version
@@ -1958,12 +2025,12 @@ fn main() {
                 app.set_menu(Menu::default(app.handle())?)?;
             }
 
-            let starting = MenuItem::with_id(app, "status", "Starting Roamies…", false, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Roamies", true, None::<&str>)?;
+            let starting = MenuItem::with_id(app, "status", "Starting My Buddy…", false, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit My Buddy", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&starting, &quit])?;
             // Left click opens the panel; right click shows the short menu.
             let mut tray = TrayIconBuilder::with_id("roamies")
-                .tooltip("Roamies")
+                .tooltip("My Buddy")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, e| {
@@ -1998,10 +2065,22 @@ fn main() {
             #[cfg(target_os = "macos")]
             fullscreen::watch(app.handle().clone());
             spawn_sidecar(app.handle());
+            #[cfg(windows)]
+            {
+                let app_handle = app.handle().clone();
+                thread::spawn(move || {
+                    thread::sleep(Duration::from_millis(350));
+                    let app3 = app_handle.clone();
+                    let _ = app_handle.run_on_main_thread(move || {
+                        to_overlays(&app3, &json!({ "kind": "summon" }));
+                        show_panel(&app3, None, false);
+                    });
+                });
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("failed to run Roamies")
+        .expect("failed to run My Buddy")
         .run(|_, e| {
             if matches!(e, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
                 sidecar::QUITTING.store(true, Ordering::SeqCst);

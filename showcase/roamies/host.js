@@ -83,7 +83,7 @@
   const field = document.createElement('input');
   Object.assign(field.style, { position: 'fixed', left: '0', top: '0', width: '1px', height: '1px', opacity: '0', pointerEvents: 'none' });
   // Its name is its look's (the sidecar's LOOKS).
-  const NAMES = { classic: 'Roamie', jarvis: 'JARVIS', glayos: 'GlayOS', ultren: 'Ultren', anime: 'Anime Girl', sarah: 'Sarah', adrian: 'Adrian', rita: 'Rita X' };
+  const NAMES = { jarvis: 'Buddy', classic: 'Pixel', cosmo: 'Cosmo', glayos: 'GlayOS', ultren: 'Ultren', anime: 'Anime Girl', sarah: 'Sarah', adrian: 'Adrian', rita: 'Rita X' };
   field.setAttribute('aria-label', 'Message for Roamie');
   field.autocomplete = 'off'; field.spellcheck = false;
   document.addEventListener('DOMContentLoaded', () => document.body.appendChild(field));
@@ -216,7 +216,7 @@
     autoListen = me;
   }
 
-  // Wake word: once a reply has been typed out and said, the sidecar may listen for "Hey Roamies" again.
+  // Wake word: once a reply has been typed out and said, the sidecar may listen for "Hey Buddy" again.
   let saidWatch = null;
   function reportSaid(rid) {
     clearInterval(saidWatch);
@@ -513,6 +513,8 @@
     if (m.kind === 'notch') { if (Roamie.notch) { Roamie.notch.enabled = !!m.on; if (m.style) Roamie.notch.style = m.style; if (!m.on) Roamie.notch.close(); } return; }
     if (m.kind === 'sound') { if (Roamie.sfx) Roamie.sfx.enabled = m.on; return; }
     if (m.kind === 'size') { for (const t of Roamie.tiles ?? []) t.creature.setForm?.(m.size); return; }
+    if (m.kind === 'pixel_color') { for (const t of Roamie.tiles ?? []) t.creature.setColor?.(m.color); return; }
+    if (m.kind === 'pixel_texture') { for (const t of Roamie.tiles ?? []) t.creature.setMatrixStyle?.(m.texture); return; }
     if (m.kind === 'look') {
       for (const t of Roamie.tiles ?? []) t.creature.setLook?.(m.look);
       field.setAttribute('aria-label', `Message for ${NAMES[m.look] ?? NAMES.classic}`);
@@ -542,6 +544,7 @@
     if (m.kind === 'greet') { if (notchOn()) N().hello(); else getAgent().act('wave'); return; }
     if (m.kind === 'intro') { if (capR()) N().say(m.text); else getAgent().intro(m.x, m.text); return; }
     if (m.kind === 'esc') { onEsc(); return; }
+    if (m.kind === 'panic') { onPanic(); return; }
     if (m.kind === 'summon') {
       // ⌃⌥S toggles; the menu's Show Sidekick only ever shows. With the capsule on, it's the capsule that comes out.
       if (notchOn()) {
@@ -591,6 +594,21 @@
     endTalk(); listen?.close(); listen = null;
     Roamie.notch?.close();
     if (a.visible) a.hide();
+  }
+  // Panic key: everything Esc does, all at once. Drops a take, stops the answer and the voice, clears drawings,
+  // closes the ask field, the panel and the capsule, and sends the buddy away.
+  function onPanic() {
+    dropAutoListen();
+    if (ask) finishAsk(null);
+    if (hearing) { hearing = false; send({ type: 'listen_cancel' }); }
+    if (responding || Roamie.voiceOut?.playing()) send({ type: 'menu', id: 'stop', via: 'hide' });
+    Roamie.voiceOut?.stop();
+    if (Roamie.ink?.busy) { Roamie.ink.clear({ all: true }); send({ type: 'ink_cleared' }); }
+    if (Roamie.panel?.isOpen) Roamie.panel.close();
+    endTalk(); listen?.close(); listen = null;
+    Roamie.notch?.close();
+    const a = getAgent();
+    if (a?.visible) a.hide();
   }
   let escUp = null;
   setInterval(() => {

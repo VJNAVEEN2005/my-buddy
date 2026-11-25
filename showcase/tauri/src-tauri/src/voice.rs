@@ -11,6 +11,11 @@ static SUMMON_ID: AtomicU32 = AtomicU32::new(0);
 /// Id of the registered "ask about an area" hotkey.
 static SNAP_ID: AtomicU32 = AtomicU32::new(0);
 static LIST_ID: AtomicU32 = AtomicU32::new(0);
+/// Id of the panic hotkey (Ctrl+Shift+X on Windows, Ctrl+Alt+X elsewhere): stop listening and hide everything.
+static PANIC_ID: AtomicU32 = AtomicU32::new(0);
+/// Id of the point-and-ask hotkey (Ctrl+Shift+Y on Windows, Ctrl+Alt+Y elsewhere): ask about, or act on, what's
+/// under the mouse.
+static POINT_ID: AtomicU32 = AtomicU32::new(0);
 /// Id of the Esc hotkey, held only while the Roamie is on screen (0 when it isn't).
 static ESC_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -137,6 +142,28 @@ pub(crate) fn init_hotkeys(app: &AppHandle) {
         Ok(m) => HOTKEYS.with(|h| *h.borrow_mut() = Some((m, [None, None, None]))),
         Err(e) => return eprintln!("hotkeys unavailable: {e}"),
     }
+    // Panic: a fixed shortcut, in the same family as the default show/hide one.
+    {
+        use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+        #[cfg(windows)]
+        let mods = Modifiers::CONTROL | Modifiers::SHIFT;
+        #[cfg(not(windows))]
+        let mods = Modifiers::CONTROL | Modifiers::ALT;
+        let panic = HotKey::new(Some(mods), Code::KeyX);
+        let point = HotKey::new(Some(mods), Code::KeyY);
+        HOTKEYS.with(|h| {
+            if let Some((manager, _)) = h.borrow_mut().as_mut() {
+                match manager.register(panic) {
+                    Ok(()) => PANIC_ID.store(panic.id(), Ordering::Relaxed),
+                    Err(e) => eprintln!("panic hotkey: {e}"),
+                }
+                match manager.register(point) {
+                    Ok(()) => POINT_ID.store(point.id(), Ordering::Relaxed),
+                    Err(e) => eprintln!("point hotkey: {e}"),
+                }
+            }
+        });
+    }
     let app = app.clone();
     GlobalHotKeyEvent::set_event_handler(Some(move |e: GlobalHotKeyEvent| {
         if e.state() != HotKeyState::Pressed {
@@ -146,6 +173,16 @@ pub(crate) fn init_hotkeys(app: &AppHandle) {
         let snap = e.id() == SNAP_ID.load(Ordering::Relaxed);
         let list = e.id() == LIST_ID.load(Ordering::Relaxed);
         let esc = e.id() != 0 && e.id() == ESC_ID.load(Ordering::Relaxed);
+        if e.id() != 0 && e.id() == PANIC_ID.load(Ordering::Relaxed) {
+            // Panic: drop any take, stop the answer and the voice, close the panel, and send the buddy away.
+            let app2 = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                cancel_voice(&app2);
+                hide_panel(&app2, "panic");
+                to_overlays(&app2, &json!({ "kind": "panic" }));
+            });
+            return;
+        }
         if esc {
             // The panel has the keyboard: Esc closes it, as it would without this hotkey.
             let app2 = app.clone();
@@ -159,6 +196,17 @@ pub(crate) fn init_hotkeys(app: &AppHandle) {
             });
             return;
         }
+        if e.id() != 0 && e.id() == POINT_ID.load(Ordering::Relaxed) {
+            // Point-and-ask: where the mouse is right now goes to the sidecar, which asks what to do about that spot.
+            let app2 = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                cancel_voice(&app2);
+                let Some((x, y)) = cursor_global(&app2) else { return };
+                let scale = app2.monitor_from_point(x, y).ok().flatten().map_or(1.0, |m| m.scale_factor());
+                to_sidecar(&app2, &json!({ "type": "point", "x": x, "y": y, "scale": scale }));
+            });
+            return;
+        }
         if !summon && !snap && !list {
             return;
         }
@@ -168,6 +216,8 @@ pub(crate) fn init_hotkeys(app: &AppHandle) {
             cancel_voice(&app2);
             if summon {
                 to_overlays(&app2, &json!({ "kind": "summon" }));
+                #[cfg(windows)]
+                crate::show_panel(&app2, None, true);
             } else if list {
                 to_sidecar(&app2, &json!({ "type": "show_list" }));
             } else {
@@ -191,7 +241,7 @@ pub(crate) fn set_hotkey(slot: usize, accel: &str) -> Result<(), String> {
             return Ok(());
         }
         if keys.iter().enumerate().any(|(i, k)| i != slot && k.map(|c| c.id()) == Some(new.id())) {
-            return Err("already used by the other Roamies shortcut".to_string());
+            return Err("already used by the other My Buddy shortcut".to_string());
         }
         if let Some(old) = current {
             let _ = manager.unregister(old);

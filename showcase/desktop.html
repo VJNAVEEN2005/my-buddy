@@ -2,17 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Roamies on the desktop</title>
+<title>My Buddy on the desktop</title>
 <style>
   /* Bubble and research-card text (the setup guide's body font). */
-  @font-face { font-family: "Martian Mono"; src: url("onboarding/fonts/martian-mono.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
-  /* Arabic (Readex Pro): the letters of an Arabic reply, which Martian Mono has none of. */
+  /* Arabic (Readex Pro): the letters of an Arabic reply, which the system font may lack. */
   @font-face {
     font-family: "Roamies Arabic";
     src: url("onboarding/fonts/readex-pro-arabic.woff2") format("woff2");
     font-weight: 160 700;
     font-display: swap;
-    /* Arabic letters only: the Latin side of every stack stays Martian Mono, spaces and all. */
+    /* Arabic letters only: the Latin side of every stack stays the system font. */
     unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F, U+2010-2011, U+204F;
   }
   @font-face {
@@ -24,8 +23,14 @@
        words and their ! . , ? sit a normal distance apart instead of a full monospace cell. */
     unicode-range: U+0020-0021, U+0028-0029, U+002C-002E, U+003A-003B, U+003F, U+00A0, U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F, U+2010-2011, U+204F;
   }
+  /* Handwritten text on drawn cards and diagrams, the Excalidraw look (Virgil by Ellinor Rapp, SIL OFL 1.1). Latin only. */
+  @font-face {
+    font-family: "Buddy Hand";
+    src: url("onboarding/fonts/Virgil-Regular.woff2") format("woff2");
+    font-display: swap;
+    unicode-range: U+0000-024F, U+2000-206F, U+20AC, U+2190-21FF;
+  }
 /* Headings on drawn cards and tickets. */
-  @font-face { font-family: "Doto"; src: url("onboarding/fonts/doto.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   /* Sized and moved by core.js to cover just what's drawn. */
   canvas { position: fixed; left: 0; top: 0; display: block; cursor: grab; touch-action: none; transform-origin: 0 0; will-change: transform;
@@ -35,7 +40,7 @@
 </style>
 </head>
 <body>
-<canvas id="stage" aria-label="Roamies roaming the desktop"></canvas>
+<canvas id="stage" aria-label="My Buddy on the desktop"></canvas>
 <script src="roamies/core.js"></script>
 <script src="roamies/markdown.js"></script>
 <script src="roamies/sfx.js"></script>
@@ -48,16 +53,16 @@
 <script src="roamies/agent-cards.js"></script>
 <script src="roamies/agent-panel.js"></script>
 <script src="roamies/jarvis.js"></script>
+<script src="roamies/cosmo.js"></script>
 <script src="roamies/people.js"></script>
 <script src="roamies/10-dither.js"></script>
 <script src="roamies/12-sidekick.js"></script>
-<script>Roamie.bootDesktop(document.getElementById("stage")); document.fonts.load('500 13px "Martian Mono"'); document.fonts.load('500 13px "Roamies Arabic"', 'م'); document.fonts.load('500 13px "Roamies Arabic RTL"', 'م ');</script>
+<script>Roamie.bootDesktop(document.getElementById("stage")); document.fonts.load('500 13px "Roamies Arabic"', 'م'); document.fonts.load('400 13px "Buddy Hand"', 'a'); document.fonts.load('500 13px "Roamies Arabic RTL"', 'م ');</script>
 <script src="roamies/ink3d.js"></script>
 <script src="roamies/world.js"></script>
 <script src="roamies/ink.js"></script>
 <script src="roamies/sidebar.js"></script>
 <script src="roamies/pen.js"></script>
-<script>document.fonts.load('800 16px "Doto"');</script>
 <script src="roamies/ask-bar.js"></script>
 <script src="roamies/notch.js"></script>
 <script src="roamies/host.js"></script>

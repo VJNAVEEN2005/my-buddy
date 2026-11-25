@@ -16,7 +16,7 @@
   let state = null, tab = 'home', deferred = false;
   // What's open in the panel itself: a key field (provider id, 'fish' or 'gemini'), the row action waiting for its
   // Confirm, each long list's page (pg) and how many rows fit on one (per, measured), Memory's tab and its search.
-  const ui = { key: null, kind: {}, arm: null, add: { label: '', url: '', key: '', images: false }, addSent: null, pg: {}, per: {}, base: {}, rec: null, mtab: 'facts', tabs: {}, q: '', bindShown: new Set() };
+  const ui = { key: null, kind: {}, arm: null, add: { label: '', url: '', key: '', images: false }, addSent: null, pg: {}, per: {}, base: {}, rec: null, mtab: 'facts', tabs: {}, q: '', bindShown: new Set(), mcpQ: '', mcpAdd: false, customMcp: { name: '', cmd: '', args: '', url: '', envKey: '', envVal: '', type: 'stdio' } };
   let armTimer = 0;
   const disarm = () => { clearTimeout(armTimer); if (ui.arm) { ui.arm = null; return true; } return false; };
 
@@ -130,10 +130,10 @@
   // tips: { value: text } shown in a tooltip on hover or keyboard focus, and read out as the option's description.
   const picks = (label, list, value, pick, k, tips = null) => el('div', { className: 'picks', role: 'radiogroup', 'aria-label': label },
     list.map(([v, text]) => el('button', {
-      className: 'px chord', type: 'button', role: 'radio', 'aria-checked': String(v === value), tabIndex: v === value ? 0 : -1, 'data-k': `${k}:${v}`,
+      className: 'chord', type: 'button', role: 'radio', 'aria-checked': String(v === value), tabIndex: v === value ? 0 : -1, 'data-k': `${k}:${v}`,
       'data-tip': tips?.[v] ?? null, 'aria-describedby': tips?.[v] ? `tip-${k}-${v}` : null,
       on: { click: () => v !== value && pick(v) },
-    }, el('span', { className: 'px cap', textContent: text }), tips?.[v] ? el('span', { className: 'sr-only', id: `tip-${k}-${v}`, textContent: tips[v] }) : null)));
+    }, el('span', { className: 'cap', textContent: text }), tips?.[v] ? el('span', { className: 'sr-only', id: `tip-${k}-${v}`, textContent: tips[v] }) : null)));
 
   // ---- tooltip: one box, by whatever has a data-tip under the pointer or keyboard focus ----
   // It can be hovered (it sits right against its control), Esc closes it, and it never covers its control.
@@ -215,6 +215,10 @@
     const now = $('now');
     now.replaceChildren(el('b', { textContent: s.text }), state.model ? ` · ${state.model.name}` : s.state === 'off' ? ' · Sign in on the Model page' : '');
     now.title = now.textContent;
+    const modelLabel = $('model-name');
+    if (modelLabel) {
+      modelLabel.textContent = state.model?.name || (s.state === 'off' ? 'No Model Selected' : 'AI Ready');
+    }
     $('ver').textContent = `v${state.version}`;
     updateButton();
     react();
@@ -229,11 +233,11 @@
     const u = state.update, b = $('head-update'), v = u.available;
     const fresh = u.result?.ok && Date.now() - (u.result.at ?? 0) < FRESH;
     const [label, aria, kind, off] =
-      u.done ? ['Done', `Roamies ${u.done} is installed. Restarting`, 'ghost', true]
-      : u.installing ? ['Updating…', `Installing Roamies ${v}`, 'ghost', true]
-      : v ? (u.page ? [`Get ${v}`, `Open the download page for Roamies ${v}`, 'primary', false] : [`Update to ${v}`, `Install Roamies ${v} and restart`, 'primary', false])
+      u.done ? ['Done', `My Buddy ${u.done} is installed. Restarting`, 'ghost', true]
+      : u.installing ? ['Updating…', `Installing My Buddy ${v}`, 'ghost', true]
+      : v ? (u.page ? [`Get ${v}`, `Open the download page for My Buddy ${v}`, 'primary', false] : [`Update to ${v}`, `Install My Buddy ${v} and restart`, 'primary', false])
       : u.checking ? ['Checking…', 'Checking for updates', 'ghost', true]
-      : fresh ? ['Up to date', `Roamies ${state.version} is up to date`, 'ghost', true]
+      : fresh ? ['Up to date', `My Buddy ${state.version} is up to date`, 'ghost', true]
       : u.result ? ['Check again', "Couldn't check for updates. Check again", 'ghost', false]
       : ['Check for updates', 'Check for updates', 'ghost', false];
     b.hidden = false; b.textContent = label; b.disabled = off;
@@ -247,15 +251,25 @@
   // Quit asks first: the first press turns it into Confirm for 4 s, the second quits.
   const quitB = $('head-quit');
   let quitTimer = 0;
-  const unarmQuit = () => { clearTimeout(quitTimer); quitB.setAttribute('aria-pressed', 'false'); quitB.setAttribute('aria-label', 'Quit Roamies'); };
+  const unarmQuit = () => { clearTimeout(quitTimer); quitB.setAttribute('aria-pressed', 'false'); quitB.setAttribute('aria-label', 'Quit My Buddy'); };
   quitB.addEventListener('click', () => {
     if (quitB.getAttribute('aria-pressed') === 'true') { unarmQuit(); act('quit'); return; }
-    quitB.setAttribute('aria-pressed', 'true'); quitB.setAttribute('aria-label', 'Confirm: quit Roamies');
+    quitB.setAttribute('aria-pressed', 'true'); quitB.setAttribute('aria-label', 'Confirm: quit My Buddy');
     quitTimer = setTimeout(unarmQuit, 4000);
   });
   const closeB = $('head-close');
-  closeB.innerHTML = pix('x');
+  closeB.innerHTML = '<span class="esc-kbd">ESC</span><span class="close-x">✕</span>';
   closeB.addEventListener('click', hide);
+  const modelPill = $('head-model-pill');
+  if (modelPill) {
+    modelPill.addEventListener('click', () => show('model'));
+    modelPill.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        show('model');
+      }
+    });
+  }
   function mark(page, why) {
     const b = $(`nav-${page}`);
     b.classList.toggle('flag', !!why);
@@ -268,7 +282,7 @@
   // The same LED renderer as on the desktop and in the setup guide, drawn small: one in the header (the Roamie
   // you have, reacting to what's going on) and one per look on the Appearance page. One loop draws them all,
   // only while the panel is up and each canvas is on screen.
-  const LED = [[4, 16, 18], [14, 92, 96], [40, 196, 184], [120, 255, 226], [230, 255, 250]];
+  const LED = [[4, 8, 18], [14, 52, 96], [32, 184, 204], [120, 239, 255], [230, 252, 255]];
   const live = new Set();
   let pointer = null; // the cursor in page px, for their eyes
   addEventListener('pointermove', (e) => { pointer = [e.clientX, e.clientY]; }, { passive: true });
@@ -281,7 +295,7 @@
   // A Roamie on a canvas of w×h CSS px: the one on screen at half scale (the app's unit, every dot half size), so
   // each size shows its own art (the full face, the small one, the pointer) at its real size next to the others.
   const ZOOM = 0.5, UNIT = 340;
-  function liveRoamie(canvas, w, h, { look = 'classic', y = 0.56, form = 'default' } = {}) {
+  function liveRoamie(canvas, w, h, { look = 'jarvis', y = 0.56, form = 'default' } = {}) {
     if (!window.Roamie?.ditherKit) return null;
     const dpr = Math.min(2, devicePixelRatio || 1);
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
@@ -335,7 +349,7 @@
   // The header's Roamie: your look, reacting to what's going on. A short line beside it when something changes.
   // The same size and detail as the look tiles (fewer dots than that and the faces turn to noise).
   const avatar = liveRoamie($('avatar'), 100, 74, { y: 0.55 });
-  const QUIPS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?' };
+  const QUIPS = { jarvis: 'Hey! Buddy here.', classic: 'Pixel me!', cosmo: 'Bloop bloop! Cosmo here, ready to explore!', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?' };
   let quipTimer = 0, seen = { look: null, update: null, opened: 0 };
   function quip(text, secs = 2.6) {
     const q = $('saying'), n = $('by');
@@ -349,7 +363,7 @@
     if (seen.look && state.look !== seen.look) { avatar.setLook(state.look); avatar.act('wave'); quip(QUIPS[state.look] ?? 'Hi!'); }
     else avatar.setLook(state.look);
     avatar.setForm(state.size);
-    if (state.update.available && state.update.available !== seen.update && seen.look) { avatar.act('hype'); quip(`Roamies ${state.update.available} is here!`); }
+    if (state.update.available && state.update.available !== seen.update && seen.look) { avatar.act('hype'); quip(`My Buddy ${state.update.available} is here!`); }
     seen.look = state.look; seen.update = state.update.available;
   }
 
@@ -443,6 +457,125 @@
       ...(on === 'commits' ? commitList() : factList()),
     ];
   }
+  // ---------------------------------------------------------------- Study
+  // The Academic Hub on one page: what's due, each course, the next 30 days and the GPA. Filled by the syllabus
+  // and calendar tools ("read my syllabus", "import my calendar"); Done marks a deliverable finished.
+  const STUDY_TABS = [['today', 'Today'], ['map', 'Map'], ['courses', 'Courses'], ['calendar', 'Calendar'], ['gpa', 'GPA']];
+  function studyPage() {
+    const s = state.study, t = pageTab('study', STUDY_TABS);
+    const head = el('div', { className: 'mhead' }, tabRow('Study', 'st-panel', STUDY_TABS, t, (id) => { ui.tabs.study = id; }));
+    if (!s || s.empty) return [head, tabPanel('st-panel', t, group(null, 'Nothing here yet. Ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file, and your courses and deadlines show up here.', null))];
+    const due = (r) => el('li', { className: 'item mem' },
+      el('span', { className: 'text', dir: 'auto', title: r.title }, r.course ? `${r.course} · ${r.title}` : r.title,
+        el('small', { className: r.overdue ? 'late' : '', textContent: r.overdue ? `Overdue · ${r.when}` : r.when })),
+      el('span', { className: 'row-btns icons' }, iconArmed('tick', 'Done', `study:done:${r.id}`, `study:done:${r.id}`, `Done: ${r.title}`)));
+    if (t === 'map') return [head, tabPanel('st-panel', t, studyMap(s.map))];
+    if (t === 'courses') {
+      const { box, nav } = paged('study-courses', s.courses, (c) => el('li', { className: 'item mem' },
+        el('span', { className: 'text', dir: 'auto', title: [c.instructor && `Instructor: ${c.instructor}`, c.email, c.office && `Office hours: ${c.office}`, c.weights && `Weights: ${c.weights}`].filter(Boolean).join('\n') },
+          [c.code, c.name].filter(Boolean).join(' · '),
+          el('small', { textContent: [c.grade, `${c.open} open`, c.next && `Next: ${c.next}`].filter(Boolean).join(' · ') }))), { label: 'Courses', empty: 'No courses yet.' });
+      return [head, tabPanel('st-panel', t, el('div', { className: 'group paged' }, box)), foot(el('p', { className: 'usage', textContent: `${s.courses.length} course${s.courses.length === 1 ? '' : 's'}` }), nav)];
+    }
+    if (t === 'calendar') {
+      const days = s.calendar.map((d) => group(d.label, null, d.items.length, el('ul', { className: 'list', 'aria-label': d.label }, d.items.map(due))));
+      return [head, tabPanel('st-panel', t, ...(days.length ? days : [group(null, 'Nothing due in the next 30 days.', null)]))];
+    }
+    if (t === 'gpa') {
+      const g = s.gpa, fmt = (v) => (v == null ? '–' : v.toFixed(2));
+      if (!g) return [head, tabPanel('st-panel', t, group(null, 'No grades yet.', null))];
+      return [head, tabPanel('st-panel', t, group('GPA', `${g.credits} credits. Projected counts the grades still to come; missing weights are never guessed.`, null,
+        el('div', { className: 'study-stats' }, el('div', {}, el('b', { textContent: fmt(g.now) }), el('span', { textContent: 'Now' })), el('div', {}, el('b', { textContent: fmt(g.projected) }), el('span', { textContent: 'Projected' }))),
+        el('ul', { className: 'list', 'aria-label': 'Grades by course' }, g.courses.map((c) => el('li', { className: 'item mem' },
+          el('span', { className: 'text', dir: 'auto', title: c.name }, c.code || c.name,
+            el('small', { textContent: `Now ${c.now}${c.nowPct != null ? ` (${c.nowPct}%)` : ''} · Projected ${c.projected}${c.projectedPct != null ? ` (${c.projectedPct}%)` : ''} · ${c.graded}/${c.total} graded` })))))))];
+    }
+    const list = [...s.today, ...s.upcoming];
+    const { box, nav } = paged('study-today', list, due, { label: 'Due soon', empty: 'Nothing due in the next two weeks. Nice.' });
+    const late = s.today.filter((r) => r.overdue).length;
+    return [head, tabPanel('st-panel', t, el('div', { className: 'group paged' }, box)),
+      foot(el('p', { className: 'usage', textContent: `${s.today.length} due today${late ? ` (${late} overdue)` : ''} · ${s.upcoming.length} in the next two weeks` }), nav)];
+  }
+  // The course map: each course with its open deliverables around it, drawn as a graph. Drag any node to move it;
+  // where things were put is kept on this computer (the panel's own storage), so the map stays as arranged.
+  const MAP_KEY = 'buddy-study-map', MW = 640, MH = 420;
+  function mapSpots() {
+    if (!ui.mapPos) { try { ui.mapPos = JSON.parse(localStorage.getItem(MAP_KEY) || '{}') || {}; } catch { ui.mapPos = {}; } }
+    return ui.mapPos;
+  }
+  const saveSpots = () => { try { localStorage.setItem(MAP_KEY, JSON.stringify(ui.mapPos ?? {})); } catch {} };
+  function studyMap(m) {
+    const courses = m?.courses ?? [], tasks = m?.tasks ?? [];
+    if (!courses.length) return group(null, 'No courses yet, so nothing to map.', null);
+    const spots = mapSpots(), at = {};
+    // Where nothing was put yet: courses round the middle, each one's tasks in a ring round it.
+    courses.forEach((c, i) => {
+      const a = (i / courses.length) * Math.PI * 2 - Math.PI / 2, r = courses.length === 1 ? 0 : Math.min(150, 60 + courses.length * 22);
+      at[c.id] = spots[c.id] ?? [MW / 2 + Math.cos(a) * r * 1.35, MH / 2 + Math.sin(a) * r];
+    });
+    for (const c of courses) {
+      const mine = tasks.filter((x) => x.course === c.id), [cx, cy] = at[c.id];
+      mine.forEach((x, j) => {
+        const a = (j / Math.max(1, mine.length)) * Math.PI * 2 + 0.4, r = 74 + (j % 2) * 18;
+        at[x.id] = spots[x.id] ?? [Math.max(30, Math.min(MW - 30, cx + Math.cos(a) * r * 1.3)), Math.max(16, Math.min(MH - 16, cy + Math.sin(a) * r))];
+      });
+    }
+    const NS = 'http://www.w3.org/2000/svg';
+    const sv = (tag, attrs = {}, ...kids) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); kids.forEach((k) => k && n.append(k)); return n; };
+    const cut = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s));
+    const svg = sv('svg', { viewBox: `0 0 ${MW} ${MH}`, width: '100%', class: 'course-map', role: 'img', 'aria-label': `Course map: ${courses.length} course${courses.length === 1 ? '' : 's'}, ${tasks.length} open deliverable${tasks.length === 1 ? '' : 's'}. Drag to arrange.`, style: 'touch-action:none;user-select:none' });
+    const lines = sv('g'), nodes = sv('g');
+    svg.append(lines, nodes);
+    const edges = tasks.filter((x) => at[x.course]).map((x) => {
+      const l = sv('line', { stroke: 'var(--line-hi)', 'stroke-width': '1.5' });
+      const put = () => { l.setAttribute('x1', at[x.course][0]); l.setAttribute('y1', at[x.course][1]); l.setAttribute('x2', at[x.id][0]); l.setAttribute('y2', at[x.id][1]); };
+      put(); lines.append(l);
+      return { ends: [x.course, x.id], put };
+    });
+    const place = (id, g) => g.setAttribute('transform', `translate(${at[id][0]},${at[id][1]})`);
+    const drag = (id, g, title) => {
+      g.style.cursor = 'grab';
+      g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `${title}. Drag, or use the arrow keys, to move it.`);
+      const move = (x, y) => {
+        at[id] = [Math.max(10, Math.min(MW - 10, x)), Math.max(10, Math.min(MH - 10, y))];
+        place(id, g); for (const e of edges) if (e.ends.includes(id)) e.put();
+      };
+      g.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); g.setPointerCapture(e.pointerId); g.style.cursor = 'grabbing';
+        const toSvg = (ev) => { const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+        const s0 = toSvg(e), [x0, y0] = at[id];
+        const onMove = (ev) => { const p = toSvg(ev); move(x0 + p.x - s0.x, y0 + p.y - s0.y); };
+        const onUp = () => { g.removeEventListener('pointermove', onMove); g.style.cursor = 'grab'; spots[id] = at[id]; saveSpots(); };
+        g.addEventListener('pointermove', onMove);
+        g.addEventListener('pointerup', onUp, { once: true });
+        g.addEventListener('pointercancel', onUp, { once: true });
+      });
+      g.addEventListener('keydown', (e) => {
+        const d = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] }[e.key];
+        if (!d) return;
+        e.preventDefault(); move(at[id][0] + d[0], at[id][1] + d[1]); spots[id] = at[id]; saveSpots();
+      });
+    };
+    for (const x of tasks) {
+      if (!at[x.course]) continue;
+      const late = x.overdue, label = cut(x.label, 22);
+      const g = sv('g', {}, sv('title', {}, `${x.label} · ${late ? 'Overdue · ' : ''}${x.when}`),
+        sv('circle', { r: '6', fill: late ? 'var(--danger)' : 'var(--panel)', stroke: late ? 'var(--danger)' : 'var(--accent-lo)', 'stroke-width': '1.5' }),
+        sv('text', { x: '10', y: '4', 'font-size': '11', fill: late ? 'var(--danger)' : 'var(--ink)', style: 'font-family:var(--font)' }, label));
+      place(x.id, g); drag(x.id, g, x.label); nodes.append(g);
+    }
+    for (const c of courses) {
+      const w = Math.max(64, cut(c.label, 16).length * 7.4 + 24);
+      const g = sv('g', {}, sv('title', {}, [c.label, c.name].filter(Boolean).join(' · ')),
+        sv('rect', { x: String(-w / 2), y: '-15', width: String(w), height: '30', rx: '15', fill: 'var(--accent)', stroke: 'var(--accent)' }),
+        sv('text', { x: '0', y: '4', 'text-anchor': 'middle', 'font-size': '12', 'font-weight': '600', fill: 'var(--accent-ink)', style: 'font-family:var(--font)' }, cut(c.label, 16)));
+      place(c.id, g); drag(c.id, g, c.label); nodes.append(g);
+    }
+    const reset = link('Reset layout', () => { ui.mapPos = {}; saveSpots(); render('map-reset'); }, { k: 'map-reset' });
+    return el('div', { className: 'group' },
+      el('div', { className: 'ghead' }, el('h2', {}, 'Course map'), el('p', { textContent: 'Each course with its open work around it. Drag to arrange; red is overdue.' })),
+      svg, el('p', { className: 'usage' }, `${courses.length} course${courses.length === 1 ? '' : 's'} · ${tasks.length} open · `, reset));
+  }
   // ---------------------------------------------------------------- Abilities
   // What I can do beyond talking, a tab each: skills I know, apps I'm connected to, and what I do on my own.
   const ABILITY_TABS = [['skills', 'Skills'], ['connections', 'Connections'], ['routines', 'Routines']];
@@ -462,7 +595,13 @@
         link('View', () => act(`skill:view:${x.slug}`, true), { k: `skill:view:${x.slug}`, aria: `View the skill ${x.name}` }),
         armed('Remove', 'Confirm', `skill:forget:${x.slug}`, `skill:forget:${x.slug}`, `Remove the skill ${x.name}`))),
     { label: 'Skills', empty: `None yet. Say “remember how to do this” after I've done something.` });
-    return { body: [el('div', { className: 'group paged' }, box)], foot: foot(k.length ? el('p', { className: 'usage', textContent: `${k.length} skill${k.length === 1 ? '' : 's'}` }) : null, nav) };
+    // Walkthroughs kept after I showed the steps: the same ask in the same app replays them with no AI call.
+    const w = state.replays ?? [];
+    const kept = w.length ? group('Kept walkthroughs', 'Replayed instantly, no AI, when you ask the same thing in the same app.', w.length,
+      el('ul', { className: 'list', 'aria-label': 'Kept walkthroughs' }, w.map((r) => el('li', { className: 'item mem' },
+        el('span', { className: 'text', dir: 'auto', title: r.ask }, `“${r.ask}”`, el('small', { textContent: `${r.app} · ${r.steps} step${r.steps === 1 ? '' : 's'}${r.uses ? ` · replayed ${r.uses}×` : ''}` })),
+        el('span', { className: 'row-btns icons' }, iconArmed('x', 'Remove', `replay:forget:${r.id}`, `replay:forget:${r.id}`, `Remove the walkthrough ${r.ask}`)))))) : null;
+    return { body: [el('div', { className: 'group paged' }, box), kept], foot: foot(k.length ? el('p', { className: 'usage', textContent: `${k.length} skill${k.length === 1 ? '' : 's'}` }) : null, nav) };
   }
   function factList() {
     const f = state.facts, q = ui.q.trim().toLowerCase();
@@ -595,7 +734,7 @@
         el('span', { className: 'acct-name' }, p.label, p.on ? el('span', { className: 'led on', role: 'img', 'aria-label': p.method === 'local' ? 'Connected' : 'Signed in', 'data-tip': p.method === 'local' ? 'Connected' : 'Signed in' }) : null),
         p.on ? el('span', { className: 'row-btns' },
           p.key ? changeKey(p) : null,
-          ui.key === p.id ? null : armed(p.signedIn && !p.keySaved ? 'Sign out' : 'Remove', 'Confirm', `signout:${p.id}`, `signout:${p.id}`, `Remove ${p.label} from Roamies`))
+          ui.key === p.id ? null : armed(p.signedIn && !p.keySaved ? 'Sign out' : 'Remove', 'Confirm', `signout:${p.id}`, `signout:${p.id}`, `Remove ${p.label} from My Buddy`))
           : state.loggingIn === p.id ? el('span', { className: 'waiting', textContent: 'Signing in…' })
           : p.method === 'oauth' ? (p.key ? el('span', { className: 'links' }, signIn(p), addKey(p)) : signIn(p))
           : addKey(p)),
@@ -891,8 +1030,8 @@
           el('p', { className: 'sub', textContent: 'Mic waits for you' }),
           picks('Mic waits for you', v.listenChoices.map((s) => [String(s), `${s} s`]), String(v.listenSecs), (x) => act(`listensecs:${x}`), 'listensecs')) : null,
         toggle('Listen after reminders', needs('Mic opens after a reminder, so you can say “snooze 10 minutes”.'), v.snoozeListen, () => act('snoozelisten'), 'snoozelisten'),
-        v.wake ? toggle('Wake word', needs(`Say “Hey ${v.wakeName || 'Roamies'}” to talk. Mic stays on.`), v.wakeWord, () => act('wakeword'), 'wakeword') : null,
-        v.wake ? el('div', { className: 'setting' }, el('span', {}, 'Wake word name', el('small', { textContent: `Hey ${v.wakeName || 'Roamies'}` })),
+        v.wake ? toggle('Wake word', needs(`Say “Hey ${v.wakeName || 'Buddy'}” to talk. Mic stays on.`), v.wakeWord, () => act('wakeword'), 'wakeword') : null,
+        v.wake ? el('div', { className: 'setting' }, el('span', {}, 'Wake word name', el('small', { textContent: `Hey ${v.wakeName || 'Buddy'}` })),
           link('Change', () => act('wakename'), { k: 'wakename', aria: 'Change the wake word name' })) : null))];
   }
   // The keys that work from anywhere. On Wayland no app may hold its own, so it lists the commands to bind instead.
@@ -914,6 +1053,10 @@
         picks('Type-to-ask keys', [...w.pairs, ['off', 'Off']], w.value, (x) => act(`write:${x}`), 'write',
           Object.fromEntries([...w.pairs.map(([id, keys]) => [id, `Tap ${keys} together, anywhere, to type to me.`]),
             ['off', 'No tap opens the text box, so the keys stay free for other apps. The Ask button on Home still opens it.']]))) : null,
+      // Fixed keys (set in the app, voice.rs): Control+Shift on Windows, Control+Option on a Mac, Control+Alt on Linux.
+      ((mods) => group('Always on', 'These two keys work from anywhere and can’t be changed yet.', null,
+        [['Panic', 'Stops listening and talking, and hides everything at once.', 'X'], ['Point and ask', 'Ask about, or act on, whatever is under the mouse.', 'Y']].map(([label, what, key]) =>
+          el('div', { className: 'setting' }, el('span', {}, label, el('small', { textContent: what })), el('span', { className: 'keys', textContent: `${mods}+${key}` })))))(state.os === 'win' ? 'Ctrl+Shift' : state.os === 'mac' ? 'Control+Option' : 'Ctrl+Alt'),
       group('Other keys', 'Press Change, then the new keys. Esc cancels.', null,
         sc.keys.map(({ id, words }) => {
           const rec = ui.rec === id, label = SHORTCUT_LABELS[id] ?? id;
@@ -930,6 +1073,7 @@
       group(null, 'Things I do on my own through the day.', null,
         state.brief ? toggle('Morning briefing', 'The first time you talk to me each day, I start with what’s due.', state.brief.on, () => act('morningbrief'), 'morningbrief') : null,
         state.brief?.on && state.brief.canTodoist ? toggle('Include Todoist', 'I read your Todoist window (opening it if needed). Stay signed in.', state.brief.todoist, () => act('brieftodoist'), 'brieftodoist') : null,
+        state.brief?.on && state.brief.canTodoist ? toggle('Include Outlook inbox', 'I glance at your Outlook window for new mail from people. I only read it, never send.', !!state.brief.outlook, () => act('briefoutlook'), 'briefoutlook') : null,
         f ? el('div', { className: 'setting' },
           el('span', {}, f.until ? 'Focus block running' : 'Focus distractions',
             el('small', { className: 'wrap', textContent: f.until ? `Until ${new Date(f.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${f.task ? ` · ${f.task}` : ''}` : `Say “focus for 30 minutes”. I watch for: ${f.list.slice(0, 4).join(', ')}${f.list.length > 4 ? '…' : ''}` })),
@@ -954,22 +1098,153 @@
   // connecting, and take any key in the chat input); here they're switched off, signed in to or removed.
   const CONN_STATE = { connected: (x) => `Connected · ${x.toolCount} tool${x.toolCount === 1 ? '' : 's'}`, 'needs-login': () => 'Needs sign-in', 'needs-key': (x) => `Needs a key${x.error ? ` (${x.error.replace(/^needs /, '')})` : ''}`,
     error: (x) => `Not working: ${x.error ?? 'no answer'}`, off: () => 'Off', connecting: () => 'Connecting…', idle: () => 'Not connected yet' };
+  const POPULAR_MCPS = [
+    { name: 'windows-mcp', label: 'Windows MCP (GUI Control)', desc: 'Control Windows GUI, click buttons with cursor animation, type and automate apps', cmd: 'npx -y @cursortouch/windows-mcp', envReq: null },
+    { name: 'github', label: 'GitHub', desc: 'Repositories, issues, pull requests and code search', cmd: 'npx -y @modelcontextprotocol/server-github', envReq: 'GITHUB_PERSONAL_ACCESS_TOKEN' },
+    { name: 'filesystem', label: 'Local Filesystem', desc: 'Read and edit project directories and local files', cmd: 'npx -y @modelcontextprotocol/server-filesystem ~/Desktop', envReq: null },
+    { name: 'notion', label: 'Notion', desc: 'Search and update notes, pages, and Notion databases', cmd: 'npx -y @modelcontextprotocol/server-notion', envReq: 'NOTION_API_KEY' },
+    { name: 'linear', label: 'Linear', desc: 'Manage project issues, sprints, and team roadmaps', cmd: 'npx -y @modelcontextprotocol/server-linear', envReq: 'LINEAR_API_KEY' },
+    { name: 'slack', label: 'Slack', desc: 'Read channels, direct messages and send team updates', cmd: 'npx -y @modelcontextprotocol/server-slack', envReq: 'SLACK_BOT_TOKEN' },
+    { name: 'postgres', label: 'PostgreSQL', desc: 'Query and explore PostgreSQL databases with safety', cmd: 'npx -y @modelcontextprotocol/server-postgres postgresql://localhost/mydb', envReq: null },
+    { name: 'sqlite', label: 'SQLite', desc: 'Inspect schemas, run queries, and read SQLite files', cmd: 'npx -y @modelcontextprotocol/server-sqlite --db-path ~/mydb.db', envReq: null },
+    { name: 'brave-search', label: 'Brave Search', desc: 'Fast live web and local news search', cmd: 'npx -y @modelcontextprotocol/server-brave-search', envReq: 'BRAVE_API_KEY' },
+    { name: 'fetch', label: 'Web Fetcher', desc: 'Fetch web pages and convert HTML to markdown', cmd: 'npx -y @modelcontextprotocol/server-fetch', envReq: null },
+    { name: 'puppeteer', label: 'Puppeteer Browser', desc: 'Browser automation, web scraping, and screenshots', cmd: 'npx -y @modelcontextprotocol/server-puppeteer', envReq: null },
+    { name: 'everything', label: 'Everything Search', desc: 'Instant Windows file and folder indexing', cmd: 'npx -y @modelcontextprotocol/server-everything', envReq: null },
+  ];
+
   function connectionsTab() {
     const list = state.connections ?? [];
-    const { box, nav } = paged('connections', list, (x) => {
+    const q = (ui.mcpQ ?? '').trim().toLowerCase();
+    const connectedNames = new Set(list.map((x) => x.name.toLowerCase()));
+
+    // Filter connected list
+    const filteredConnected = q ? list.filter((x) => x.name.toLowerCase().includes(q) || (x.where ?? '').toLowerCase().includes(q)) : list;
+
+    // Filter catalog (popular MCPs not yet connected)
+    const availableCatalog = POPULAR_MCPS.filter((m) => !connectedNames.has(m.name.toLowerCase()) && (!q || m.name.includes(q) || m.label.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q)));
+
+    // Active connections item renderer
+    const { box, nav } = paged('connections', filteredConnected, (x) => {
       const bad = x.state === 'error' || x.state === 'needs-key' || x.state === 'needs-login';
       return el('li', { className: 'acct' }, el('div', { className: 'setting' },
-        el('span', { id: `lbl-mcp-${x.name}` }, el('span', { className: 'acct-name' }, x.name, x.state === 'connected' ? el('span', { className: 'led on', role: 'img', 'aria-label': 'Connected', 'data-tip': 'Connected' }) : null),
+        el('span', { id: `lbl-mcp-${x.name}` },
+          el('span', { className: 'acct-name' }, x.name, x.state === 'connected' ? el('span', { className: 'led on', role: 'img', 'aria-label': 'Connected', 'data-tip': 'Connected' }) : null),
           el('small', { className: bad ? 'late' : '', textContent: (CONN_STATE[x.state] ?? CONN_STATE.idle)(x), title: x.where })),
         el('span', { className: 'row-btns' },
           x.state === 'needs-login' ? link('Sign in', () => act(`mcp:login:${x.name}`, true), { k: `mcp:login:${x.name}`, aria: `Sign in to ${x.name}` }) : null,
           armed('Remove', 'Confirm', `mcp:remove:${x.name}`, `mcp:remove:${x.name}`, `Remove the ${x.name} connection and its keys`),
           el('button', { className: 'px switch', type: 'button', role: 'switch', 'aria-checked': String(!!x.enabled), 'aria-labelledby': `lbl-mcp-${x.name}`, 'data-k': `mcp:sw:${x.name}`,
             on: { click: () => act(`mcp:${x.enabled ? 'off' : 'on'}:${x.name}`) } }))));
-    }, { label: 'Connections', empty: 'No apps connected yet.' });
+    }, { label: 'Active Connections', empty: q ? `No active MCP matching "${ui.mcpQ}".` : 'No active MCP connections.' });
+
+    // Toolbar: Search box + Add Custom MCP toggle
+    const searchField = el('span', { className: 'px field' },
+      el('input', { type: 'search', id: 'find-mcp', value: ui.mcpQ, placeholder: 'Search MCP servers or directory…', 'aria-label': 'Search MCP servers', autocomplete: 'off', spellcheck: false,
+        on: {
+          input: (e) => { ui.mcpQ = e.target.value; ui.pg.connections = 0; render(); },
+          keydown: (e) => { if (e.key === 'Escape' && ui.mcpQ) { e.preventDefault(); e.stopPropagation(); e.target.value = ui.mcpQ = ''; render(); } }
+        }
+      }));
+
+    const addCustomBtn = btn(ui.mcpAdd ? '✕ Cancel' : '+ Add Custom MCP', () => { ui.mcpAdd = !ui.mcpAdd; render(); }, { kind: ui.mcpAdd ? 'ghost' : 'solid', k: 'toggle-custom-mcp' });
+
+    const toolbar = el('div', { className: 'mcp-toolbar' }, searchField, addCustomBtn);
+
+    // Custom MCP Form
+    const customForm = ui.mcpAdd ? el('div', { className: 'mcp-custom-box' },
+      el('div', { className: 'mcp-custom-header' },
+        el('h4', { textContent: 'Connect Custom Model Context Protocol (MCP) Server' }),
+        el('p', { className: 'why wrap', textContent: 'Connect any local command-line or remote HTTP/SSE MCP server.' })),
+      el('div', { className: 'mcp-form-grid' },
+        el('div', { className: 'field-group' },
+          el('label', { textContent: 'Server Identifier (Name)' }),
+          el('span', { className: 'px field' },
+            el('input', { id: 'mcp-cust-name', placeholder: 'e.g. my-postgres-db', value: ui.customMcp.name,
+              on: { input: (e) => { ui.customMcp.name = e.target.value; } } }))),
+        el('div', { className: 'field-group' },
+          el('label', { textContent: 'Transport Type' }),
+          el('span', { className: 'px field select' },
+            el('select', { id: 'mcp-cust-type',
+              on: { change: (e) => { ui.customMcp.type = e.target.value; render(); } } },
+              el('option', { value: 'stdio', textContent: 'Command Line (stdio)', selected: ui.customMcp.type === 'stdio' }),
+              el('option', { value: 'sse', textContent: 'Remote HTTP / SSE (url)', selected: ui.customMcp.type === 'sse' })))),
+        ui.customMcp.type === 'stdio' ? el('div', { className: 'field-group span-2' },
+          el('label', { textContent: 'Command / Executable' }),
+          el('span', { className: 'px field' },
+            el('input', { id: 'mcp-cust-cmd', placeholder: 'e.g. npx -y @modelcontextprotocol/server-postgres', value: ui.customMcp.cmd,
+              on: { input: (e) => { ui.customMcp.cmd = e.target.value; } } })))
+          : el('div', { className: 'field-group span-2' },
+          el('label', { textContent: 'Server SSE URL' }),
+          el('span', { className: 'px field' },
+            el('input', { id: 'mcp-cust-url', placeholder: 'e.g. https://my-server.com/sse', value: ui.customMcp.url,
+              on: { input: (e) => { ui.customMcp.url = e.target.value; } } }))),
+        ui.customMcp.type === 'stdio' ? el('div', { className: 'field-group span-2' },
+          el('label', { textContent: 'Arguments (space separated)' }),
+          el('span', { className: 'px field' },
+            el('input', { id: 'mcp-cust-args', placeholder: 'e.g. postgresql://localhost/db ~/Desktop', value: ui.customMcp.args,
+              on: { input: (e) => { ui.customMcp.args = e.target.value; } } }))) : null,
+        el('div', { className: 'field-group' },
+          el('label', { textContent: 'Environment Variable Name (Optional)' }),
+          el('span', { className: 'px field' },
+            el('input', { id: 'mcp-cust-envkey', placeholder: 'e.g. API_KEY', value: ui.customMcp.envKey,
+              on: { input: (e) => { ui.customMcp.envKey = e.target.value; } } }))),
+        el('div', { className: 'field-group' },
+          el('label', { textContent: 'Environment Variable Value (Optional)' }),
+          el('span', { className: 'px field' },
+            el('input', { type: 'password', id: 'mcp-cust-envval', placeholder: 'Secret token or key', value: ui.customMcp.envVal,
+              on: { input: (e) => { ui.customMcp.envVal = e.target.value; } } })))),
+      el('div', { className: 'mcp-form-actions' },
+        btn('Connect Server', () => {
+          const name = ui.customMcp.name.trim();
+          if (!name) return $('mcp-cust-name')?.focus();
+          const cmd = ui.customMcp.cmd.trim();
+          const url = ui.customMcp.url.trim();
+          const env = {};
+          if (ui.customMcp.envKey.trim() && ui.customMcp.envVal) env[ui.customMcp.envKey.trim()] = ui.customMcp.envVal.trim();
+          const args = ui.customMcp.args.trim().split(/\s+/).filter(Boolean);
+          send({
+            type: 'panel_mcp_add',
+            name,
+            command: ui.customMcp.type === 'stdio' ? (cmd || undefined) : undefined,
+            args: ui.customMcp.type === 'stdio' && args.length ? args : undefined,
+            url: ui.customMcp.type === 'sse' ? (url || undefined) : undefined,
+            env: Object.keys(env).length ? env : undefined,
+          });
+          ui.mcpAdd = false;
+          ui.customMcp = { name: '', cmd: '', args: '', url: '', envKey: '', envVal: '', type: 'stdio' };
+          render();
+        }, { kind: 'solid', k: 'submit-custom-mcp' }),
+        btn('Cancel', () => { ui.mcpAdd = false; render(); }, { kind: 'ghost', k: 'cancel-custom-mcp' }))) : null;
+
+    // Available Catalog Grid
+    const catalogCards = availableCatalog.map((m) => el('div', { className: 'mcp-card' },
+      el('div', { className: 'mcp-card-top' },
+        el('h5', { textContent: m.label }),
+        el('span', { className: 'mcp-tag', textContent: m.envReq ? 'Needs Key' : 'Ready' })),
+      el('p', { className: 'mcp-card-desc', textContent: m.desc }),
+      el('div', { className: 'mcp-card-foot' },
+        btn('Connect', () => {
+          const parts = m.cmd.split(/\s+/);
+          const command = parts[0];
+          const args = parts.slice(1);
+          send({ type: 'panel_mcp_add', name: m.name, command, args });
+          render();
+        }, { kind: 'ghost', k: `mcp-cat-${m.name}` }))));
+
+    const catalogSection = availableCatalog.length ? el('div', { className: 'mcp-catalog-wrap' },
+      el('div', { className: 'ghead' }, el('h3', { textContent: 'Popular MCP Directory' }), el('p', { className: 'wrap', textContent: 'One-click integrations with developer tools, knowledge bases, and local services.' })),
+      el('div', { className: 'mcp-catalog-grid' }, ...catalogCards)) : null;
+
     return {
-      body: [group(null, 'Apps like Linear and Notion I can use for you.', null), el('div', { className: 'group paged' }, box)],
-      foot: foot(btn('Connect an app', () => act('askconnect', true), { k: 'askconnect' }), nav),
+      body: [
+        toolbar,
+        customForm,
+        group('Connected MCP Servers', 'Active integrations your assistant can invoke automatically.', null),
+        el('div', { className: 'group paged' }, box),
+        catalogSection
+      ].filter(Boolean),
+      foot: foot(el('p', { className: 'usage', textContent: `${list.length} active connection${list.length === 1 ? '' : 's'}` }), nav),
     };
   }
   // What I may do, and when I start.
@@ -1064,7 +1339,7 @@
   }
 
   // ---------------------------------------------------------------- render
-  const PANES = { home, memory, abilities: abilitiesPage, model: modelPage, appearance: appearancePage, speaking: speakingPage, listening: listeningPage, shortcuts: shortcutsPage, general: generalPage, about: aboutPage, whatsnew: whatsNewPage };
+  const PANES = { home, memory, abilities: abilitiesPage, study: studyPage, model: modelPage, appearance: appearancePage, speaking: speakingPage, listening: listeningPage, shortcuts: shortcutsPage, general: generalPage, about: aboutPage, whatsnew: whatsNewPage };
   // focusKey: what to focus after (a data-k, or an element id); otherwise whatever had focus keeps it.
   function render(focusKey, animate = false) {
     if (!state) return;
@@ -1188,8 +1463,12 @@
   const body = $('frame');
   body.addEventListener('animationend', (e) => {
     if (e.target !== body) return;
-    if (e.animationName === 'crt-on' && body.classList.contains('opening')) body.classList.remove('opening');
-    else if (e.animationName === 'crt-off' && body.classList.contains('shutting')) { body.classList.remove('shutting'); body.classList.add('shut'); }
+    if ((e.animationName.includes('in') || e.animationName.startsWith('panel-in')) && body.classList.contains('opening')) {
+      body.classList.remove('opening');
+    } else if ((e.animationName.includes('out') || e.animationName.startsWith('panel-out')) && body.classList.contains('shutting')) {
+      body.classList.remove('shutting');
+      body.classList.add('shut');
+    }
   });
   window.__panelOpen = (fromBottom = false) => {
     body.classList.remove('shut', 'shutting', 'opening');
@@ -1237,7 +1516,7 @@
 
   // ---------------------------------------------------------------- browser preview
   function preview() {
-    document.title = 'Roamies panel (preview with sample data)';
+    document.title = 'My Buddy panel (preview with sample data)';
     const at = Date.now(), q = new URLSearchParams(location.search);
     const CLAUDE_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
     const s = {
@@ -1272,7 +1551,7 @@
         { at: at - 9.4 * 60e3, kind: 'ask', text: 'what does this error mean' },
       ],
       usage: { requests: 14, tokens: 31240 },
-      facts: [{ id: 'f1', text: 'Prefers short answers in the morning' }, { id: 'f2', text: 'Working on the Roamies 1.0 launch, due end of month' }, { id: 'f3', text: 'Has a cat called Miso' }],
+      facts: [{ id: 'f1', text: 'Prefers short answers in the morning' }, { id: 'f2', text: 'Working on the My Buddy 1.0 launch, due end of month' }, { id: 'f3', text: 'Has a cat called Miso' }],
       commitments: [{ id: 'c1', text: 'Send the launch email', when: 'Fri 7 Nov, 10:00', overdue: false }, { id: 'c2', text: 'Book the dentist', when: 'Mon 3 Nov, 09:00', overdue: true }],
       jobs: [{ id: 'j1a2b3c', title: 'Tech news', paused: false, next: 'Thu 6 Nov, 08:00', repeat: 'weekdays', last: 'Last: Summed up 6 stories on AI chips and a Mac update', bad: false },
         { id: 'j4d5e6f', title: 'Tidy Downloads', paused: true, next: 'Paused', repeat: 'Fri', last: "Didn't run: Allow File Edits & Commands is off", bad: true }],
@@ -1282,7 +1561,7 @@
         { name: 'notion', remote: true, where: 'https://mcp.notion.com/mcp', enabled: true, state: 'needs-login', toolCount: 0, error: 'Requires login.' },
         { name: 'everything', remote: false, where: 'npx -y @modelcontextprotocol/server-everything', enabled: true, state: 'error', toolCount: 0, error: 'spawn npx ENOENT' },
         { name: 'files', remote: false, where: 'npx -y @modelcontextprotocol/server-filesystem ~/Desktop', enabled: false, state: 'off', toolCount: 0, error: null }],
-      name: 'Roamie', look: 'classic', looks: [['classic', 'Roamie'], ['jarvis', 'JARVIS'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['anime', 'Anime Girl'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']],
+      name: 'Buddy', look: 'jarvis', looks: [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['anime', 'Anime Girl'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']],
       size: 'default', sizes: [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']],
       replies: 'voice', fishKey: true, fishModel: 'drama-3', fishFree: false,
       // ?tts=gemini: Gemini as the voice, its key saved.
@@ -1308,13 +1587,24 @@
       fallbacks: { on: true, slots: ['gemini:gemini-3.8-flash', ''], limited: [{ label: 'Claude', until: at + 40 * 60e3 }], using: 'gemini:gemini-3.8-flash' },
       // Effort per slot: '' is automatic (low); computer use is set to High, and backup 1 (Gemini, which only thinks at High) too.
       efforts: { default: '', computer: 'high', code: '', agents: '', draw: '', web: '', backup1: 'high', backup2: '' },
-      voice: { on: true, keys: '⌃⌥', ready: true, mac: true, lang: 'auto', langOnline: null, studioSpeak: 'short', mute: true, autoListen: q.has('listen'), listenEvery: false, listenSecs: 8, listenChoices: [3, 5, 8, 10, 15], mics: [{ id: 'BuiltIn', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], mic: '', micAuto: 'MacBook Pro Microphone', wake: !q.has('nowake'), wakeWord: false, wakeName: 'Roamies', download: null }, askKeys: '⌥⌘', brief: { on: true, todoist: false, canTodoist: true }, focus: { until: null, task: '', list: ['YouTube', 'Reddit', 'X', 'Steam', 'Netflix'], custom: false }, sync: { dir: '', at: null, error: null, paused: false }, shortcuts: { talk: { value: 'control+option', pairs: [['control+option', 'Control+Option'], ['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] }, keys: [{ id: 'summon', words: 'Control+Option+S' }, { id: 'snap', words: 'Control+Option+A' }, { id: 'list', words: 'Control+Option+L' }] }, writeKeys: { value: 'option+command', pairs: [['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] },
+      voice: { on: true, keys: '⌃⌥', ready: true, mac: true, lang: 'auto', langOnline: null, studioSpeak: 'short', mute: true, autoListen: q.has('listen'), listenEvery: false, listenSecs: 8, listenChoices: [3, 5, 8, 10, 15], mics: [{ id: 'BuiltIn', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], mic: '', micAuto: 'MacBook Pro Microphone', wake: !q.has('nowake'), wakeWord: false, wakeName: 'My Buddy', download: null }, askKeys: '⌥⌘', brief: { on: true, todoist: false, canTodoist: true }, focus: { until: null, task: '', list: ['YouTube', 'Reddit', 'X', 'Steam', 'Netflix'], custom: false }, sync: { dir: '', at: null, error: null, paused: false }, shortcuts: { talk: { value: 'control+option', pairs: [['control+option', 'Control+Option'], ['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] }, keys: [{ id: 'summon', words: 'Control+Option+S' }, { id: 'snap', words: 'Control+Option+A' }, { id: 'list', words: 'Control+Option+L' }] }, writeKeys: { value: 'option+command', pairs: [['option+command', 'Option+Command'], ['control+command', 'Control+Command'], ['control+shift', 'Control+Shift'], ['option+shift', 'Option+Shift']] },
       sound: true, notch: q.has('notch') || q.has('capsule') ? 'drop' : null, notchReal: q.has('notch'), actions: false, skipAllow: false, login: { on: true },
       update: { available: new URLSearchParams(location.search).has('update') && new URLSearchParams(location.search).get('update') !== 'failed' ? '0.9.1' : null, installing: false, checking: false, result: null },
       intro: false,
     };
+    s.replays = [{ id: 'w1', app: 'excel', ask: 'how do i add a chart', steps: 3, uses: 2 }];
+    // The Study page's sample: two courses, a few deadlines (?empty clears it).
+    s.study = { empty: false,
+      today: [{ id: 'a1', title: 'Lab 3 report', course: 'CS 101', when: 'Yesterday', overdue: true }, { id: 'a2', title: 'Quiz 2', course: 'MATH 120', when: 'Today', overdue: false }],
+      upcoming: [{ id: 'a3', title: 'Project proposal', course: 'CS 101', when: 'Mon 30 Nov', overdue: false }, { id: 'a4', title: 'Problem set 6', course: 'MATH 120', when: 'Wed 2 Dec', overdue: false }],
+      courses: [{ id: 'c1', code: 'CS 101', name: 'Intro to Computer Science', credits: 4, instructor: 'Prof. Rao', email: 'rao@uni.edu', office: 'Tue 2-4', open: 5, done: 3, grade: 'A- (91.2%)', next: 'Project proposal · Mon 30 Nov', weights: 'Labs 40%, Exams 60%' },
+        { id: 'c2', code: 'MATH 120', name: 'Calculus I', credits: 3, instructor: 'Dr. Lee', email: '', office: '', open: 4, done: 2, grade: 'B+ (88%)', next: 'Quiz 2 · Today', weights: 'Homework 30%, Exams 70%' }],
+      calendar: [{ day: '2026-11-25', label: 'Today', items: [{ id: 'a2', title: 'Quiz 2', course: 'MATH 120', when: 'Today' }] }, { day: '2026-11-30', label: 'Mon 30 Nov', items: [{ id: 'a3', title: 'Project proposal', course: 'CS 101', when: 'Mon 30 Nov' }] }],
+      map: { courses: [{ id: 'c1', label: 'CS 101', name: 'Intro to Computer Science' }, { id: 'c2', label: 'MATH 120', name: 'Calculus I' }],
+        tasks: [{ id: 'a1', label: 'Lab 3 report', course: 'c1', when: 'Yesterday', overdue: true }, { id: 'a3', label: 'Project proposal', course: 'c1', when: 'Mon 30 Nov' }, { id: 'a6', label: 'Lab 4', course: 'c1', when: 'Fri 4 Dec' }, { id: 'a2', label: 'Quiz 2', course: 'c2', when: 'Today' }, { id: 'a4', label: 'Problem set 6', course: 'c2', when: 'Wed 2 Dec' }] },
+      gpa: { now: 3.52, projected: 3.45, credits: 7, courses: [{ code: 'CS 101', name: 'Intro to Computer Science', credits: 4, now: 'A-', nowPct: 91.2, projected: 'A-', projectedPct: 90, graded: 3, total: 8 }, { code: 'MATH 120', name: 'Calculus I', credits: 3, now: 'B+', nowPct: 88, projected: 'B', projectedPct: 85, graded: 2, total: 6 }] } };
     if (q.has('busy')) Object.assign(s, { busy: true, status: { state: 'busy', text: 'Reading notes.md' } });
-    if (q.has('empty')) Object.assign(s, { recent: [], facts: [], commitments: [], jobs: [], skills: [], connections: [], usage: null });
+    if (q.has('empty')) Object.assign(s, { recent: [], facts: [], commitments: [], jobs: [], skills: [], connections: [], usage: null, study: { empty: true } });
     if (q.has('many')) {
       const things = ['Prefers short answers', 'Drinks oat flat whites', 'Works late on Thursdays', 'Has a cat called Miso', 'Training for a 10k in March', 'Learning Japanese', 'Uses Figma for design', 'Ships on Fridays', 'Allergic to peanuts', 'Sister is called Ana'];
       s.facts = Array.from({ length: 100 }, (_, i) => ({ id: `f${i}`, text: `${things[i % things.length]}${i >= things.length ? ` (${Math.floor(i / things.length) + 1})` : ''}` }));
