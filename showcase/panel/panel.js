@@ -240,6 +240,8 @@
   let freshTimer = 0;
   function updateButton() {
     const u = state.update, b = $('head-update'), v = u.available;
+    // This build has no update feed yet: no button that could only say "up to date".
+    if (u.off && !v) { b.hidden = true; return; }
     const fresh = u.result?.ok && Date.now() - (u.result.at ?? 0) < FRESH;
     const [label, aria, kind, off] =
       u.done ? ['Done', `My Buddy ${u.done} is installed. Restarting`, 'ghost', true]
@@ -314,7 +316,7 @@
   // A Roamie on a canvas of w×h CSS px: the one on screen at half scale (the app's unit, every dot half size), so
   // each size shows its own art (the full face, the small one, the pointer) at its real size next to the others.
   const ZOOM = 0.5, UNIT = 340;
-  function liveRoamie(canvas, w, h, { look = 'jarvis', y = 0.56, form = 'default' } = {}) {
+  function liveRoamie(canvas, w, h, { look = 'nova', y = 0.56, form = 'default' } = {}) {
     if (!window.Roamie?.ditherKit) return null;
     const dpr = Math.min(2, devicePixelRatio || 1);
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
@@ -375,7 +377,7 @@
     if (!avatar || Date.now() - faceAt < 2500) return;
     faceAt = Date.now(); avatar.act(FACES[faceN++ % FACES.length]);
   });
-  const QUIPS = { jarvis: 'Hey! Buddy here.', classic: 'Pixel me!', cosmo: 'Bloop bloop! Cosmo here, ready to explore!', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?' };
+  const QUIPS = { jarvis: 'Hey! Buddy here.', classic: 'Pixel me!', cosmo: 'Bloop bloop! Cosmo here, ready to explore!', peri: 'Boo! Peri here, your little companion.', nova: 'Hi hi! Nova here, ready when you are.', sprout: 'Hiya! Sprout here, let\'s grow something good.' };
   let quipTimer = 0, seen = { look: null, update: null, opened: 0 };
   function quip(text, secs = 2.6) {
     const q = $('saying'), n = $('by');
@@ -486,27 +488,54 @@
   // ---------------------------------------------------------------- Study
   // The Academic Hub on one page: what's due, each course, the next 30 days and the GPA. Filled by the syllabus
   // and calendar tools ("read my syllabus", "import my calendar"); Done marks a deliverable finished.
-  const STUDY_TABS = [['today', 'Today'], ['exams', 'Exams'], ['map', 'Map'], ['courses', 'Courses'], ['calendar', 'Calendar'], ['gpa', 'GPA']];
+  const STUDY_TABS = [['today', 'Today'], ['exams', 'Exams'], ['cards', 'Cards'], ['map', 'Map'], ['courses', 'Courses'], ['calendar', 'Calendar'], ['gpa', 'GPA']];
   function studyPage() {
     const s = state.study, t = pageTab('study', STUDY_TABS);
     const head = el('div', { className: 'mhead' }, tabRow('Study', 'st-panel', STUDY_TABS, t, (id) => { ui.tabs.study = id; }));
     if (t === 'exams') return [head, ...examsTab(s?.exams ?? [], t)];
-    if (!s || (s.uniEmpty ?? s.empty) && !(t === 'today' && s.exams?.length)) return [head, tabPanel('st-panel', t, group(null, 'Nothing here yet. Ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file, and your courses and deadlines show up here. Preparing for a competitive exam? See the Exams tab.', null))];
+    if (t === 'cards') return [head, ...cardsTab(s?.flash, t)];
+    const courses = s?.courses ?? [];
     const due = (r) => el('li', { className: 'item mem' },
       el('span', { className: 'text', dir: 'auto', title: r.title }, r.course ? `${r.course} · ${r.title}` : r.title,
         el('small', { className: r.overdue ? 'late' : '', textContent: r.overdue ? `Overdue · ${r.when}` : r.when })),
-      el('span', { className: 'row-btns icons' }, iconArmed('tick', 'Done', `study:done:${r.id}`, `study:done:${r.id}`, `Done: ${r.title}`)));
+      el('span', { className: 'row-btns icons' },
+        link('Edit', () => openForm('task_edit', { id: r.id, title: r.title, course: courses.find((c) => c.code === r.course || c.name === r.course)?.id ?? '', due: r.day ? isoOf(r.day) : '' }), { k: `task-edit-${r.id}`, aria: `Edit ${r.title}` }),
+        iconArmed('tick', 'Done', `study:done:${r.id}`, `study:done:${r.id}`, `Done: ${r.title}`),
+        iconArmed('x', 'Remove', `study:drop:${r.id}`, `study:drop:${r.id}`, `Remove ${r.title}`)));
+    const addTask = btn('Add deadline', () => openForm('task_add', { course: courses[0]?.id ?? '' }), { k: 'sf-task_add' });
+    const addCourse = btn('Add course', () => openForm('course_add', {}), { k: 'sf-course_add' });
+    const tools = (...b) => el('div', { className: 'study-tools' }, ...b);
+    if (t === 'today') {
+      const fd = s?.flash?.due ?? 0;
+      const weekRow = el('div', { className: 'study-tools' }, btn('Show my week', () => act('study:week'), { k: 'week' }),
+        fd ? btn(`Review ${fd} flashcard${fd === 1 ? '' : 's'}`, () => { ui.tabs.study = 'cards'; render(); }, { k: 'go-cards' }) : null,
+        btn('Quiz me', () => { ui.tabs.study = 'cards'; render('quiz-topic'); }, { k: 'go-quiz' }));
+      const top = [focusCard(), streakCard(s?.streak), weekRow].filter(Boolean);
+      if (!s || (s.uniEmpty ?? s.empty) && !s.exams?.length) return [head, tabPanel('st-panel', t, ...top, group(null, 'Nothing due yet. Add a course and its deadlines here, or ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file. Preparing for a competitive exam? See the Exams tab.', null, studyForm('course_add', 'task_add') ?? tools(addCourse, courses.length ? addTask : null)))];
+      const list = [...s.today, ...s.upcoming];
+      const { box, nav } = paged('study-today', list, due, { label: 'Due soon', empty: 'Nothing due in the next two weeks. Nice.' });
+      const late = s.today.filter((r) => r.overdue).length;
+      // Exam prep for today sits above the deadlines: each exam's topics for today, ticked off here too.
+      const prep = (s.exams ?? []).filter((x) => x.today.length).map((x) => group(x.name, examLine(x), null,
+        el('ul', { className: 'list', 'aria-label': `${x.name}: today` }, x.today.map((tp) => topicRow(x, tp, 'done')))));
+      return [head, tabPanel('st-panel', t, ...top, ...prep, studyForm('task_add', 'task_edit', 'course_add') ?? tools(addTask, addCourse), el('div', { className: 'group paged' }, box)),
+        foot(el('p', { className: 'usage', textContent: `${s.today.length} due today${late ? ` (${late} overdue)` : ''} · ${s.upcoming.length} in the next two weeks` }), nav)];
+    }
+    if (!s || (s.uniEmpty ?? s.empty)) return [head, tabPanel('st-panel', t, group(null, 'Nothing here yet. Add a course to start, or ask me to “read my syllabus” with the file, or “import my calendar” with an .ics file.', null, studyForm('course_add') ?? tools(addCourse)))];
     if (t === 'map') return [head, tabPanel('st-panel', t, studyMap(s.map))];
     if (t === 'courses') {
       const { box, nav } = paged('study-courses', s.courses, (c) => el('li', { className: 'item mem' },
         el('span', { className: 'text', dir: 'auto', title: [c.instructor && `Instructor: ${c.instructor}`, c.email, c.office && `Office hours: ${c.office}`, c.weights && `Weights: ${c.weights}`].filter(Boolean).join('\n') },
           [c.code, c.name].filter(Boolean).join(' · '),
-          el('small', { textContent: [c.grade, `${c.open} open`, c.next && `Next: ${c.next}`].filter(Boolean).join(' · ') }))), { label: 'Courses', empty: 'No courses yet.' });
-      return [head, tabPanel('st-panel', t, el('div', { className: 'group paged' }, box)), foot(el('p', { className: 'usage', textContent: `${s.courses.length} course${s.courses.length === 1 ? '' : 's'}` }), nav)];
+          el('small', { textContent: [c.credits != null && `${c.credits} credits`, c.grade, `${c.open} open`, c.next && `Next: ${c.next}`].filter(Boolean).join(' · ') })),
+        el('span', { className: 'row-btns icons' },
+          link('Edit', () => openForm('course_edit', { id: c.id, code: c.code, name: c.name, credits: c.credits ?? '', instructor: c.instructor, email: c.email }), { k: `course-edit-${c.id}`, aria: `Edit ${c.code || c.name}` }),
+          iconArmed('x', 'Remove', `course:drop:${c.id}`, `course:drop:${c.id}`, `Remove ${c.code || c.name} and its deadlines`))), { label: 'Courses', empty: 'No courses yet.' });
+      return [head, tabPanel('st-panel', t, studyForm('course_add', 'course_edit', 'task_add') ?? tools(addCourse, addTask), el('div', { className: 'group paged' }, box)), foot(el('p', { className: 'usage', textContent: `${s.courses.length} course${s.courses.length === 1 ? '' : 's'}` }), nav)];
     }
     if (t === 'calendar') {
       const days = s.calendar.map((d) => group(d.label, null, d.items.length, el('ul', { className: 'list', 'aria-label': d.label }, d.items.map(due))));
-      return [head, tabPanel('st-panel', t, ...(days.length ? days : [group(null, 'Nothing due in the next 30 days.', null)]))];
+      return [head, tabPanel('st-panel', t, studyForm('task_add', 'task_edit') ?? tools(addTask), ...(days.length ? days : [group(null, 'Nothing due in the next 30 days.', null)]))];
     }
     if (t === 'gpa') {
       const g = s.gpa, fmt = (v) => (v == null ? '–' : v.toFixed(2));
@@ -517,14 +546,114 @@
           el('span', { className: 'text', dir: 'auto', title: c.name }, c.code || c.name,
             el('small', { textContent: `Now ${c.now}${c.nowPct != null ? ` (${c.nowPct}%)` : ''} · Projected ${c.projected}${c.projectedPct != null ? ` (${c.projectedPct}%)` : ''} · ${c.graded}/${c.total} graded` })))))))];
     }
-    const list = [...s.today, ...s.upcoming];
-    const { box, nav } = paged('study-today', list, due, { label: 'Due soon', empty: 'Nothing due in the next two weeks. Nice.' });
-    const late = s.today.filter((r) => r.overdue).length;
-    // Exam prep for today sits above the deadlines: each exam's topics for today, ticked off here too.
-    const prep = (s.exams ?? []).filter((x) => x.today.length).map((x) => group(x.name, examLine(x), null,
-      el('ul', { className: 'list', 'aria-label': `${x.name}: today` }, x.today.map((tp) => topicRow(x, tp, 'done')))));
-    return [head, tabPanel('st-panel', t, ...prep, el('div', { className: 'group paged' }, box)),
-      foot(el('p', { className: 'usage', textContent: `${s.today.length} due today${late ? ` (${late} overdue)` : ''} · ${s.upcoming.length} in the next two weeks` }), nav)];
+    return [head];
+  }
+  const isoOf = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+  // ---- Add and edit by hand: one small form at a time, opened in place of the buttons that open it.
+  // ui.sform: { kind, vals, err }. Sent as { type: 'panel_study', op: kind, ...vals }; the sidecar checks every field again.
+  const FORMS = {
+    course_add: { title: 'Add a course', save: 'Add course', fields: [['code', 'Code', 'CS 101'], ['name', 'Name', 'Intro to Computer Science'], ['credits', 'Credits', '3', 'number'], ['instructor', 'Instructor', 'Prof. Rao'], ['email', 'Instructor email', 'rao@uni.edu', 'email', 2]], need: ['name'] },
+    course_edit: { title: 'Edit course', save: 'Save', fields: [['code', 'Code', 'CS 101'], ['name', 'Name', ''], ['credits', 'Credits', '3', 'number'], ['instructor', 'Instructor', ''], ['email', 'Instructor email', '', 'email', 2]], need: ['name'] },
+    task_add: { title: 'Add a deadline', save: 'Add deadline', fields: [['title', 'What', 'Lab 4 report', 'text', 2], ['course', 'Course', '', 'course'], ['due', 'Due', '', 'date']], need: ['title', 'due'] },
+    task_edit: { title: 'Edit deadline', save: 'Save', fields: [['title', 'What', '', 'text', 2], ['course', 'Course', '', 'course'], ['due', 'Due', '', 'date']], need: ['title', 'due'] },
+    exam_add: { title: 'Add an exam', save: 'Add exam', fields: [['name', 'Exam', 'SSC CGL 2027'], ['date', 'Exam date', '', 'date'], ['target', 'Target (optional)', '160+ in Tier 1', 'text', 2], ['syllabus', 'Syllabus (optional)', 'Quantitative Aptitude: Percentages, Ratio, Profit and loss\nReasoning: Series, Coding-decoding', 'area', 2]], need: ['name'] },
+    topics_add: { title: 'Add topics', save: 'Add topics', fields: [['syllabus', 'Topics', 'Subject: topic, topic, topic\nAnother subject: topic, topic', 'area', 2]], need: ['syllabus'] },
+    card_add: { title: 'Add a flashcard', save: 'Add card', fields: [['front', 'Question', 'What is Ohm’s law?', 'area', 2], ['back', 'Answer', 'V = I × R', 'area', 2], ['deck', 'Deck', 'Physics', 'text', 2]], need: ['front', 'back'] },
+    mock_add: { title: 'Log a mock test', save: 'Add score', fields: [['score', 'Score', '142', 'number'], ['total', 'Out of', '200', 'number'], ['name', 'Name (optional)', 'Mock 6', 'text', 2]], need: ['score', 'total'] },
+  };
+  function openForm(kind, vals) { disarm(); ui.sform = { kind, vals: { ...vals }, err: '' }; render(`sf-${kind}-0`); }
+  const closeForm = () => { ui.sform = null; render(); };
+  // The open form, if it's one of these kinds; else null (so the caller shows its buttons).
+  function studyForm(...kinds) {
+    const f = ui.sform;
+    if (!f || !kinds.includes(f.kind)) return null;
+    const def = FORMS[f.kind], v = f.vals, courses = state.study?.courses ?? [];
+    const field = ([key, label, ph, type = 'text', span = 1], i) => {
+      const id = `sf-${key}`, k = `sf-${f.kind}-${i}`, keep = (e) => { v[key] = e.target.value; };
+      const input = type === 'area'
+        ? el('textarea', { id, placeholder: ph, value: v[key] ?? '', 'data-k': k, on: { input: keep } })
+        : type === 'course'
+          ? el('select', { id, 'data-k': k, on: { change: keep } }, el('option', { value: '', textContent: 'No course', selected: !v[key] }),
+            courses.map((c) => el('option', { value: c.id, textContent: [c.code, c.name].filter(Boolean).join(' · '), selected: v[key] === c.id })))
+          : el('input', { id, type, placeholder: ph, value: v[key] ?? '', 'data-k': k, min: type === 'number' ? '0' : null, step: type === 'number' ? 'any' : null, on: { input: keep, keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } } } });
+      return el('div', { className: `field-group${span === 2 ? ' span-2' : ''}` }, el('label', { htmlFor: id, textContent: label }), input);
+    };
+    const submit = () => {
+      const miss = def.need.find((n) => !String(v[n] ?? '').trim());
+      if (miss) { f.err = `${def.fields.find(([k]) => k === miss)[1]} is needed.`; return render(`sf-${f.kind}-${def.fields.findIndex(([k]) => k === miss)}`); }
+      if (f.kind === 'mock_add' && !(Number(v.total) > 0 && Number(v.score) >= 0 && Number(v.score) <= Number(v.total))) { f.err = 'The score has to be between 0 and the total.'; return render(`sf-${f.kind}-0`); }
+      send({ type: 'panel_study', op: f.kind, ...v });
+      ui.sform = null; render();
+    };
+    return el('div', { className: 'group', 'data-anim': `sf-${f.kind}` },
+      el('div', { className: 'ghead' }, el('h2', {}, def.title)),
+      el('form', { className: 'study-form', on: { submit: (e) => { e.preventDefault(); submit(); } } },
+        def.fields.map(field),
+        f.err ? el('p', { className: 'form-err', role: 'alert', textContent: f.err }) : null,
+        el('div', { className: 'form-actions' }, btn(def.save, submit, { kind: 'primary', k: `sf-save-${f.kind}` }), link('Cancel', closeForm, { k: `sf-cancel-${f.kind}` }))));
+  }
+
+  // ---- Focus timer: a Pomodoro of 25 or 50 minutes. The sidecar runs it as a focus block (it watches for the
+  // distraction list and says when it's done); this card shows the time left and ticks every second while open.
+  let focusTick = 0;
+  function focusCard() {
+    const f = state.focus;
+    if (!f) return null;
+    clearInterval(focusTick);
+    if (!f.until) return group('Focus timer', 'Study without drifting. I watch for distractions and tell you when time’s up.', null,
+      el('div', { className: 'focus-row' }, el('span', { className: 'focus-clock', textContent: '25:00' }),
+        el('div', { className: 'study-tools' }, btn('Focus 25 min', () => act('focusstart:25'), { kind: 'primary', k: 'focus25' }), btn('50 min', () => act('focusstart:50'), { k: 'focus50' }))));
+    const left = () => { const ms = Math.max(0, f.until - Date.now()), m = Math.floor(ms / 60000), sec = Math.floor((ms % 60000) / 1000); return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`; };
+    const clock = el('span', { className: 'focus-clock', role: 'timer', 'aria-label': 'Focus time left', textContent: left() });
+    focusTick = setInterval(() => { if (!clock.isConnected) return clearInterval(focusTick); clock.textContent = left(); }, 1000);
+    return group('Focusing', `Until ${new Date(f.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${f.task && f.task !== 'study' ? ` · ${f.task}` : ''}. Stay with it.`, null,
+      el('div', { className: 'focus-row' }, clock, el('div', { className: 'study-tools' }, btn('Stop', () => act('focusstop'), { k: 'focusstop2' }))));
+  }
+  // ---- Flashcards (flashcards.mjs): review what's due one card at a time (Show answer, then Again or Got it: the
+  // spaced repetition moves it), make a quiz from a topic or a notes file, and add cards by hand.
+  function cardsTab(f, t) {
+    const review = f?.review ?? [];
+    ui.cardAt = Math.min(ui.cardAt ?? 0, Math.max(0, review.length - 1));
+    const c = review[ui.cardAt];
+    const grade = (good) => { send({ type: 'panel_study', op: 'card_review', id: c.id, good }); ui.cardFlip = false; review.splice(ui.cardAt, 1); if (f) f.due = Math.max(0, (f.due ?? 1) - 1); render(); };
+    const cardBox = c ? group('Review', `${review.length} due now · ${c.deck}${c.box ? ` · seen ${c.box} time${c.box === 1 ? '' : 's'} right` : ' · new'}`, null,
+      el('div', { className: `flash${ui.cardFlip ? ' flipped' : ''}`, 'data-anim': `flash-${c.id}` },
+        el('p', { className: 'flash-front', dir: 'auto', textContent: c.front }),
+        ui.cardFlip ? el('p', { className: 'flash-back', dir: 'auto', textContent: c.back }) : null),
+      el('div', { className: 'study-tools' }, ui.cardFlip
+        ? [btn('Again', () => grade(false), { k: 'card-again', aria: 'Again: show it again today' }), btn('Got it', () => grade(true), { kind: 'primary', k: 'card-good', aria: 'Got it: show it later' })]
+        : [btn('Show answer', () => { ui.cardFlip = true; render('card-good'); }, { kind: 'primary', k: 'card-show' })],
+        el('span', { className: 'row-btns icons' }, iconArmed('x', 'Delete card', `card:drop:${c.id}`, `card:drop:${c.id}`, 'Delete this card'))))
+      : group('Review', f?.total ? `All caught up. ${f.learnt} of ${f.total} cards learnt; the rest come back on their day.` : 'No flashcards yet. Add one below, take a quiz (the ones you get wrong become cards), or ask me to “make flashcards for chapter 3”.', null);
+    const quizVals = (ui.quiz ??= { topic: '', count: '5' });
+    const doQuiz = () => { if (!quizVals.topic.trim()) { ui.quizErr = 'Type a topic, or pick a notes file.'; return render('quiz-topic'); } send({ type: 'panel_study', op: 'quiz', topic: quizVals.topic, count: quizVals.count }); ui.quizErr = ''; ui.quizSent = ''; render(); };
+    const fileIn = el('input', { type: 'file', accept: '.pdf,.docx,.txt,.md', hidden: true, on: { change: (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 15e6) { ui.quizErr = 'That file is over 15 MB.'; return render(); }
+      const r = new FileReader();
+      r.onload = () => { send({ type: 'panel_study', op: 'quiz_file', name: file.name, data: String(r.result).split(',')[1] ?? '', count: quizVals.count }); ui.quizErr = ''; ui.quizSent = file.name; render(); };
+      r.readAsDataURL(file);
+    } } });
+    const quiz = group('Quiz me', 'A quiz on screen, from a topic or your own notes (PDF, Word or text). Questions you get wrong come back as flashcards.', null,
+      el('form', { className: 'study-form', on: { submit: (e) => { e.preventDefault(); doQuiz(); } } },
+        el('div', { className: 'field-group span-2' }, el('label', { htmlFor: 'quiz-topic', textContent: 'Topic' }), el('input', { id: 'quiz-topic', type: 'text', placeholder: 'Thermodynamics, Chapter 4, Indian polity…', value: quizVals.topic, 'data-k': 'quiz-topic', on: { input: (e) => { quizVals.topic = e.target.value; }, keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); doQuiz(); } } } })),
+        el('div', { className: 'field-group' }, el('label', { htmlFor: 'quiz-n', textContent: 'Questions' }), el('select', { id: 'quiz-n', 'data-k': 'quiz-n', on: { change: (e) => { quizVals.count = e.target.value; } } }, ['3', '4', '5', '6'].map((n) => el('option', { value: n, textContent: n, selected: quizVals.count === n })))),
+        ui.quizErr ? el('p', { className: 'form-err', role: 'alert', textContent: ui.quizErr }) : ui.quizSent ? el('p', { className: 'form-ok', textContent: `Reading ${ui.quizSent}… the quiz opens on your screen.` }) : null,
+        el('div', { className: 'form-actions' }, btn('Quiz me', doQuiz, { kind: 'primary', k: 'quiz-go' }), btn('From a notes file…', () => fileIn.click(), { k: 'quiz-file' }), fileIn)));
+    const decks = f?.decks?.length ? group('Decks', null, f.decks.length, el('ul', { className: 'list', 'aria-label': 'Decks' }, f.decks.map((d) => el('li', { className: 'item mem' },
+      el('span', { className: 'text', dir: 'auto' }, d.name, el('small', { textContent: `${d.total} card${d.total === 1 ? '' : 's'}${d.due ? ` · ${d.due} due` : ''}` })))))) : null;
+    const add = studyForm('card_add') ?? el('div', { className: 'study-tools' }, btn('Add flashcard', () => openForm('card_add', { deck: f?.decks?.[0]?.name ?? '' }), { k: 'sf-card_add' }));
+    return [tabPanel('st-panel', t, cardBox, quiz, add, decks)];
+  }
+  // ---- The streak: days in a row with some studying (a tick, a mock, a finished focus block), and this week.
+  function streakCard(k) {
+    if (!k) return null;
+    const desc = k.current ? `${k.today ? 'Done for today.' : 'Tick off one thing today to keep it going.'} Best: ${k.best} day${k.best === 1 ? '' : 's'}${k.focusMin ? ` · ${Math.round(k.focusMin / 6) / 10} h focused` : ''}.` : 'Tick off a topic or a deadline, or finish a focus block, to start a streak.';
+    return group('Streak', desc, null, el('div', { className: 'streak' },
+      el('div', { className: 'study-stats' }, el('div', {}, el('b', { textContent: `${k.current}` }), el('span', { textContent: k.current === 1 ? 'Day in a row' : 'Days in a row' }))),
+      el('div', { className: 'streak-days', 'aria-label': 'This week' }, k.week.map((d) => el('span', { className: `${d.on ? 'on' : ''}${d.today ? ' today' : ''}`, title: d.day, 'aria-label': `${d.day}: ${d.on ? 'studied' : 'no study'}`, textContent: d.label })))));
   }
   // ---- Exams: competitive and entrance exam prep (exams.mjs). One exam at a time: the countdown, how far through the
   // syllabus each subject is, today's topics at the pace the days left need, revision, and the mock test trend.
@@ -532,19 +661,32 @@
   const topicRow = (x, tp, how) => el('li', { className: 'item mem' },
     el('span', { className: 'text', dir: 'auto', title: tp.name }, tp.name, el('small', { textContent: how === 'rev' ? `${tp.subject} · due for revision` : tp.status === 'learning' ? `${tp.subject} · started` : tp.subject })),
     el('span', { className: 'row-btns icons' }, iconArmed('tick', how === 'rev' ? 'Revised' : 'Done', `exam:${how}:${x.id}:${tp.id}`, `exam:${how}:${x.id}:${tp.id}`, `${how === 'rev' ? 'Revised' : 'Done'}: ${tp.name}`)));
-  function mockSpark(mocks) {
+  // The mock scores as a small line chart: each test's % above its dot, a light grid at the low and high marks, and
+  // the target as a dashed line when it can be read as a score ("160+" out of the tests' total, or "75%").
+  function mockSpark(mocks, target) {
     const pts = mocks.filter((m) => m.pct != null), esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    if (pts.length < 2) return null;
-    const W = 220, H = 44, lo = Math.max(0, Math.min(...pts.map((m) => m.pct)) - 5), hi = Math.min(100, Math.max(...pts.map((m) => m.pct)) + 5);
-    const xy = pts.map((m, i) => [Math.round((i / (pts.length - 1)) * (W - 8) + 4), Math.round(H - 4 - ((m.pct - lo) / Math.max(1, hi - lo)) * (H - 8))]);
+    if (!pts.length) return null;
+    const n = /(\d+(?:\.\d+)?)/.exec(String(target ?? '')), tot = pts.at(-1).total;
+    const goal = !n ? null : /%/.test(target) ? Number(n[1]) : tot > 0 && Number(n[1]) <= tot ? Math.round((Number(n[1]) / tot) * 1000) / 10 : null;
+    const vals = [...pts.map((m) => m.pct), ...(goal != null && goal <= 100 ? [goal] : [])];
+    const W = 520, H = 120, L = 34, R = 12, T = 18, B = 20;
+    const lo = Math.max(0, Math.floor((Math.min(...vals) - 5) / 5) * 5), hi = Math.min(100, Math.ceil((Math.max(...vals) + 5) / 5) * 5);
+    const y = (v) => Math.round(T + (H - T - B) * (1 - (v - lo) / Math.max(1, hi - lo)));
+    const x = (i) => Math.round(pts.length === 1 ? (L + W - R) / 2 : L + (i / (pts.length - 1)) * (W - L - R));
+    const xy = pts.map((m, i) => [x(i), y(m.pct)]);
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'mock-spark'); svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', `Mock scores: ${pts.map((m) => `${m.pct}%`).join(', ')}`);
-    svg.innerHTML = `<polyline points="${xy.map((p) => p.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>${xy.map(([a, b], i) => `<circle cx="${a}" cy="${b}" r="${i === xy.length - 1 ? 3 : 2}"><title>${esc(pts[i].name || 'Mock')}: ${pts[i].score}/${pts[i].total} (${pts[i].pct}%)</title></circle>`).join('')}`;
+    svg.setAttribute('aria-label', `Mock scores: ${pts.map((m) => `${m.pct}%`).join(', ')}${goal != null ? `. Target ${goal}%` : ''}`);
+    const grid = [lo, hi].map((v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}%</text>`).join('');
+    const g = goal != null && goal <= 100 ? `<line class="goal" x1="${L}" x2="${W - R}" y1="${y(goal)}" y2="${y(goal)}"/><text class="goal-t" x="${L + 4}" y="${y(goal) - 4}" text-anchor="start">target ${goal}%</text>` : '';
+    const line = xy.length > 1 ? `<polyline points="${xy.map((p) => p.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+    const dots = xy.map(([a, b], i) => `<circle class="${i === xy.length - 1 ? 'last' : ''}" cx="${a}" cy="${b}" r="${i === xy.length - 1 ? 3.5 : 2.5}"><title>${esc(pts[i].name || 'Mock')}: ${pts[i].score}/${pts[i].total} (${pts[i].pct}%)</title></circle><text class="val" x="${a}" y="${b - 8}" text-anchor="middle">${pts[i].pct}%</text><text x="${a}" y="${H - 4}" text-anchor="middle">${esc((pts[i].name || `#${i + 1}`).slice(0, 10))}</text>`).join('');
+    svg.innerHTML = grid + g + line + dots;
     return svg;
   }
   function examsTab(exams, t) {
-    if (!exams.length) return [tabPanel('st-panel', t, group(null, 'Preparing for UPSC, TNPSC, SSC, banking, GATE, CAT, NEET, JEE or a placement test? Tell me which exam and when, like “I’m writing SSC CGL on 2027-06-14”. I’ll set out the syllabus by subject, give you a daily plan that leaves time to revise, and track your mock scores here.', null))];
+    const addExam = btn('Add exam', () => openForm('exam_add', {}), { k: 'sf-exam_add' });
+    if (!exams.length) return [tabPanel('st-panel', t, group(null, 'Preparing for UPSC, TNPSC, SSC, banking, GATE, CAT, NEET, JEE or a placement test? Add it here, or tell me which exam and when, like “I’m writing SSC CGL on 2027-06-14”. I’ll set out the syllabus by subject, give you a daily plan that leaves time to revise, and track your mock scores here.', null, studyForm('exam_add') ?? el('div', { className: 'study-tools' }, addExam)))];
     const x = exams.find((e) => e.id === ui.exam) ?? exams[0];
     const pick = exams.length > 1 ? el('div', { className: 'exam-pick', role: 'group', 'aria-label': 'Exam' }, exams.map((e) => el('button', {
       className: 'chip', type: 'button', 'aria-pressed': String(e.id === x.id), 'data-k': `exam-${e.id}`, textContent: e.name,
@@ -561,13 +703,17 @@
       el('span', { className: 'subj-bar', 'aria-hidden': 'true' }, el('i', { style: `width:${sb.total ? Math.round((sb.done / sb.total) * 100) : 0}%` })),
       el('span', { className: 'subj-n', textContent: `${sb.done}/${sb.total}` }))));
     const when = x.date ? new Date(`${x.date}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'no date yet';
-    const spark = mockSpark(x.mocks);
-    return [tabPanel('st-panel', t, pick,
+    const spark = mockSpark(x.mocks, x.target);
+    const tools = studyForm('exam_add', 'topics_add', 'mock_add') ?? el('div', { className: 'study-tools' },
+      btn('Log mock score', () => openForm('mock_add', { exam: x.id, total: x.mocks.at(-1)?.total ?? '' }), { kind: 'primary', k: 'sf-mock_add' }),
+      btn('Add topics', () => openForm('topics_add', { exam: x.id }), { k: 'sf-topics_add' }), addExam);
+    const badge = toggle('Countdown on the desktop', 'A small badge in the corner of your screen: days left and today’s topics.', state.study?.badge !== false, () => act(state.study?.badge !== false ? 'badge:off' : 'badge:on'), 'exam-badge');
+    return [tabPanel('st-panel', t, pick, tools, el('div', { className: 'group' }, badge),
       group(x.name, `${when}${x.target ? ` · target ${x.target}` : ''}`, null, stats, subjects),
       group('Today', x.total === x.done ? 'Whole syllabus done. Mocks and revision now.' : `${x.perDay} new topic${x.perDay === 1 ? '' : 's'} a day keeps you on track, with time left to revise.`, x.today.length || null,
         x.today.length ? el('ul', { className: 'list', 'aria-label': 'Today' }, x.today.map((tp) => topicRow(x, tp, 'done'))) : null),
       x.revise.length ? group('Revise', 'Finished a week or more ago.', x.revise.length, el('ul', { className: 'list', 'aria-label': 'Revise' }, x.revise.map((tp) => topicRow(x, tp, 'rev')))) : null,
-      group('Mock tests', x.mocks.length ? `Average ${x.mockAvg}% over ${x.mocks.length}${x.target ? ` · target ${x.target}` : ''}. Tell me a score to add one, like “got 142 out of 200 in today’s mock”.` : 'None yet. Tell me a score after each mock, like “got 142 out of 200”, and the trend shows here.', null, spark)),
+      group('Mock tests', x.mocks.length ? `Average ${x.mockAvg}% over ${x.mocks.length}${x.target ? ` · target ${x.target}` : ''}. Log one with the button above, or tell me, like “got 142 out of 200 in today’s mock”.` : 'None yet. Log a score after each mock with the button above, or tell me “got 142 out of 200”, and the trend shows here.', null, spark)),
       foot(el('p', { className: 'usage', textContent: examLine(x) }), el('span', { className: 'row-btns icons' }, iconArmed('x', 'Stop tracking', `exam:forget:${x.id}`, `exam:forget:${x.id}`, `Stop tracking ${x.name}`)))];
   }
   // The course map: each course with its open deliverables around it, drawn as a graph. Drag any node to move it;
@@ -741,6 +887,8 @@
 
   // Settings, one page per concern.
   const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
+  const CARD_SIZES = [['1', 'Normal'], ['1.25', 'Big'], ['1.5', 'Bigger']];
+  const CARD_TIPS = { '1': 'The usual size.', '1.25': 'A quarter bigger: easier to read.', '1.5': 'Half again as big: best for maths, diagrams and reading from a distance.' };
   const THEME_TIPS = { light: 'Dark text on white.', dark: 'Light text on black.', system: 'Follows your computer: light by day, dark when it switches to dark.' };
   const SIZE_TIPS = { default: 'My full size.', small: 'Half my size, so I take less of your screen.', cursor: 'I become a little arrow pointer, like your cursor.' };
   // The runnable models, one optgroup per signed-in provider, values 'provider:modelId'; `current` is the selected one ('' for none).
@@ -933,7 +1081,9 @@
     const tabs = [['look', 'Look'], ['size', 'Size'], ['theme', 'Theme']], t = pageTab('appearance', tabs);
     const head = el('div', { className: 'mhead' }, tabRow('Appearance', 'look-panel', tabs, t, (id) => { ui.tabs.appearance = id; }));
     if (t === 'theme') return [head, tabPanel('look-panel', t, group(null, 'This changes this window and the cards and bubbles on your screen, not me.', null,
-      picks('Theme', THEMES, themePref(state.theme), (x) => { setTheme(x); act(`theme:${x}`); }, 'theme', THEME_TIPS)))];
+      picks('Theme', THEMES, themePref(state.theme), (x) => { setTheme(x); act(`theme:${x}`); }, 'theme', THEME_TIPS)),
+      group('Card size', 'How big the cards, notes and diagrams I draw are. Big text is easier to study from.', null,
+        picks('Card size', CARD_SIZES, String(state.cardScale ?? 1), (x) => act(`cards:${x}`), 'cards', CARD_TIPS)))];
     return [head, tabPanel('look-panel', t, t === 'look'
       ? group(null, 'Each look has its own name and voice.', null, lookTiles())
       : group(null, 'How big I am on your screen.', null, picks('Size', state.sizes, state.size, (x) => act(`size:${x}`), 'size', SIZE_TIPS)))];
@@ -1357,7 +1507,7 @@
   function myCard() {
     if (!mine) {
       const cv = el('canvas', { 'aria-hidden': 'true' });
-      const r = liveRoamie(cv, 100, 74, { look: state.look ?? 'jarvis', y: 0.55 });
+      const r = liveRoamie(cv, 100, 74, { look: state.look ?? 'nova', y: 0.55 });
       const ver = el('small', {});
       const card = el('div', { className: 'maker mine' }, cv, el('span', {}, 'My Buddy', ver));
       let waved = 0;
@@ -1365,7 +1515,7 @@
       r?.appear('crt');
       mine = { card, r, ver };
     }
-    mine.r?.setLook(state.look ?? 'jarvis');
+    mine.r?.setLook(state.look ?? 'nova');
     mine.ver.textContent = `Made by Naveen VJ · v${state.version}`;
     return mine.card;
   }
@@ -1433,7 +1583,7 @@
     if (!state) return;
     const active = document.activeElement;
     // Never rebuild under someone typing a key: catch up when they leave the field.
-    if (!focusKey && !animate && active?.tagName === 'INPUT' && active.closest('.pane')) { deferred = true; return; }
+    if (!focusKey && !animate && (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') && active.closest('.pane')) { deferred = true; return; }
     // Nor under an open dropdown: rebuilding a <select> while its list is open (the status and usage updates come every
     // few seconds) made Windows pick whatever option the mouse was over. Catch up once a choice is made or it closes.
     if (!focusKey && !animate && picking && active?.tagName === 'SELECT' && active.closest('.pane')) { deferred = true; return; }
@@ -1463,7 +1613,7 @@
     }
     if (keep) (document.querySelector(`.pane [data-k="${CSS.escape(keep)}"]`) ?? document.getElementById(keep))?.focus();
   }
-  document.addEventListener('focusout', (e) => { if (deferred && e.target.tagName === 'INPUT') setTimeout(() => deferred && render(), 0); });
+  document.addEventListener('focusout', (e) => { if (deferred && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) setTimeout(() => deferred && render(), 0); });
   // A dropdown is open from the press that opens it until a choice, Escape or leaving it.
   const donePicking = () => { if (!picking) return; picking = false; if (deferred) setTimeout(() => deferred && render(), 0); };
   let pickTimer = 0;
@@ -1664,7 +1814,7 @@
         { name: 'notion', remote: true, where: 'https://mcp.notion.com/mcp', enabled: true, state: 'needs-login', toolCount: 0, error: 'Requires login.' },
         { name: 'everything', remote: false, where: 'npx -y @modelcontextprotocol/server-everything', enabled: true, state: 'error', toolCount: 0, error: 'spawn npx ENOENT' },
         { name: 'files', remote: false, where: 'npx -y @modelcontextprotocol/server-filesystem ~/Desktop', enabled: false, state: 'off', toolCount: 0, error: null }],
-      theme: ['dark', 'system'].includes(q.get('theme')) ? q.get('theme') : 'light', name: 'Buddy', look: 'jarvis', looks: [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['peri', 'Peri'], ['nova', 'Nova'], ['sprout', 'Sprout']],
+      theme: ['dark', 'system'].includes(q.get('theme')) ? q.get('theme') : 'light', name: 'Nova', look: 'nova', looks: [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['peri', 'Peri'], ['nova', 'Nova'], ['sprout', 'Sprout']],
       size: 'default', sizes: [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']],
       replies: 'voice', fishKey: true, fishModel: 'drama-3', fishFree: false,
       // ?tts=gemini: Gemini as the voice, its key saved.
@@ -1708,6 +1858,15 @@
       gpa: { now: 3.52, projected: 3.45, credits: 7, courses: [{ code: 'CS 101', name: 'Intro to Computer Science', credits: 4, now: 'A-', nowPct: 91.2, projected: 'A-', projectedPct: 90, graded: 3, total: 8 }, { code: 'MATH 120', name: 'Calculus I', credits: 3, now: 'B+', nowPct: 88, projected: 'B', projectedPct: 85, graded: 2, total: 6 }] } };
     // Two exams being prepared for (exams.mjs's examView, worked out for 25 Nov 2026).
     s.study.exams = [{"id":"x1","name":"SSC CGL 2027","date":"2027-06-14","daysLeft":201,"target":"160+ in Tier 1","done":8,"total":29,"subjects":[{"name":"Quantitative Aptitude","done":3,"total":10},{"name":"Reasoning","done":3,"total":7},{"name":"English","done":2,"total":6},{"name":"General Awareness","done":0,"total":6}],"perDay":1,"today":[{"id":"t3","name":"Simple and compound interest","subject":"Quantitative Aptitude","status":"learning"}],"revise":[{"id":"t0","name":"Number system","subject":"Quantitative Aptitude"},{"id":"t1","name":"Percentages","subject":"Quantitative Aptitude"}],"mocks":[{"id":"m0","at":1793008800000,"score":118,"total":200,"pct":59,"name":"Mock 1"},{"id":"m1","at":1793527200000,"score":126,"total":200,"pct":63,"name":"Mock 2"},{"id":"m2","at":1794045600000,"score":123,"total":200,"pct":61.5,"name":"Mock 3"},{"id":"m3","at":1794564000000,"score":134,"total":200,"pct":67,"name":"Mock 4"},{"id":"m4","at":1795082400000,"score":141,"total":200,"pct":70.5,"name":"Mock 5"}],"mockAvg":64.2,"mockLast":70.5,"mockChange":3.5},{"id":"x2","name":"TCS placement","date":"2026-12-20","daysLeft":25,"target":null,"done":0,"total":6,"subjects":[{"name":"Technical","done":0,"total":4},{"name":"Aptitude","done":0,"total":2}],"perDay":1,"today":[{"id":"u0","name":"Data structures","subject":"Technical","status":"todo"}],"revise":[],"mocks":[],"mockAvg":null,"mockLast":null,"mockChange":null}];
+    // The streak: four days in a row, today included.
+    s.study.badge = !q.has('nobadge');
+    s.study.flash = q.has('empty') ? { due: 0, total: 0, learnt: 0, decks: [], review: [] } : { due: 3, total: 24, learnt: 11, decks: [{ name: 'Quiz mistakes', total: 6, due: 2 }, { name: 'Physics', total: 18, due: 1 }],
+      review: [{ id: 'f1', front: 'What is the SI unit of electric charge?', back: 'The coulomb (C): one ampere for one second.', deck: 'Physics', box: 1 },
+        { id: 'f2', front: 'Who wrote the Preamble of the Indian Constitution?', back: 'Jawaharlal Nehru drafted the Objectives Resolution it is based on.', deck: 'Quiz mistakes', box: 0 },
+        { id: 'f3', front: '7 × 8 = ?', back: '56', deck: 'Quiz mistakes', box: 0 }] };
+    s.study.streak = { current: 4, best: 9, today: true, focusMin: 250, week: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label, i) => ({ day: `2026-11-${19 + i}`, label, on: i >= 3 || i === 0, today: i === 6 })) };
+    if (q.has('focusing')) s.focus.until = Date.now() + 18 * 60e3 + 42e3;
+    if (q.has('updatesoff')) s.update.off = true;
     if (q.has('busy')) Object.assign(s, { busy: true, status: { state: 'busy', text: 'Reading notes.md' } });
     if (q.has('empty')) Object.assign(s, { recent: [], facts: [], commitments: [], jobs: [], skills: [], connections: [], usage: null, study: { empty: true } });
     if (q.has('many')) {
@@ -1739,9 +1898,24 @@
     return async (cmd, args) => {
       if (cmd !== 'sidecar_send') return null;
       console.log('[preview] would send', JSON.stringify(args.msg));
+      // Study edits come back as new state, as from the sidecar.
+      const m = args.msg ?? {};
+      if (m.type === 'panel_study') {
+        const st = s.study, x = st.exams.find((e) => e.id === m.exam);
+        if (m.op === 'mock_add' && x) { const pct = Math.round((m.score / m.total) * 1000) / 10; x.mocks.push({ id: `m${x.mocks.length}`, at: Date.now(), score: +m.score, total: +m.total, pct, name: m.name || `Mock ${x.mocks.length + 1}` }); x.mockChange = Math.round((pct - x.mockLast) * 10) / 10; x.mockLast = pct; }
+        if (m.op === 'card_add') { st.flash.review.push({ id: `f${Date.now()}`, front: m.front, back: m.back, deck: m.deck || 'General', box: 0 }); st.flash.total++; st.flash.due++; }
+        if (m.op === 'course_add') st.courses.push({ id: `c${st.courses.length + 1}`, code: (m.code || '').toUpperCase(), name: m.name, credits: +m.credits || 3, instructor: m.instructor || '', email: m.email || '', office: '', open: 0, done: 0, grade: '', next: '', weights: '' });
+        if (m.op === 'task_add') st.upcoming.push({ id: `a${Date.now()}`, title: m.title, course: st.courses.find((c) => c.id === m.course)?.code ?? '', when: new Date(`${m.due}T00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }), overdue: false });
+        if (m.op === 'exam_add') st.exams.push({ id: `x${st.exams.length + 1}`, name: m.name, date: m.date || null, daysLeft: null, target: m.target || null, done: 0, total: 0, subjects: [], perDay: 0, today: [], revise: [], mocks: [], mockAvg: null, mockLast: null, mockChange: null });
+        setTimeout(() => window.__panel({ kind: 'state', state: s }), 120);
+      }
+      if (/^focusstart:\d+$/.test(m.id ?? '')) { s.focus.until = Date.now() + Number(m.id.slice(11)) * 60e3; setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
+      if (m.id === 'focusstop') { s.focus.until = null; setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
       // A look change comes back as new state, as from the sidecar, so the Roamie's reaction can be seen.
       if (args.msg?.type === 'copy_problem') setTimeout(() => window.__panel({ kind: 'copied', which: 'problem', ok: q.get('copy') !== 'fail' }), 150);
       const id = args.msg?.id ?? '';
+      if (id === 'badge:on' || id === 'badge:off') { s.study.badge = id === 'badge:on'; setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
+      if (id.startsWith('cards:')) { s.cardScale = Number(id.slice(6)); setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
       if (id.startsWith('size:')) { s.size = id.slice(5); setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
       if (id.startsWith('tts:')) { s.tts = id.slice(4); s.studio = s.tts === 'voicestudio' ? STUDIO[q.get('studio')] ?? STUDIO.on : null; setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }
       if (id.startsWith('studiovoice:') && s.studio) { s.studio.voice = id.slice(12) === 'default' ? null : id.slice(12); setTimeout(() => window.__panel({ kind: 'state', state: s }), 120); }

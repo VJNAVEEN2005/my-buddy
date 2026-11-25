@@ -210,6 +210,9 @@ console.log('safety tests: passed');
     'Pagination', 'Sender name', 'Payment history', 'Buyer guide', 'Kopenhagen', 'Esciolto', 'Bayaran balik policy page'])
     assert.ok(!isRiskyClick(l), `"${l}" is a normal click`);
   console.log('multilingual risky click tests: passed');
+  for (const l of ['Finish Cancellation', 'Confirm cancellation', 'End my membership', 'End subscription'])
+    assert.ok(isRiskyClick(l), `"${l}" needs a yes`);
+  for (const l of ['Weekend plans', 'Cancel']) assert.ok(!isRiskyClick(l), `"${l}" is a normal click`);
 }
 // Redirects joined with & (2>&1, &>file) are part of the command, not a background job.
 assert.deepEqual(splitCommand('ls 2>&1 | head').map((p) => p.text), ['ls 2>&1', 'head'], '2>&1 stays one part');

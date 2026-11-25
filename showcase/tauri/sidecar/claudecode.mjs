@@ -355,7 +355,7 @@ function sdkOptions(o, resume, link) {
     strictMcpConfig: true,
     mcpServers: { [MCP_SERVER]: bridge.config },
     allowedTools: bridge.allowedTools(),
-    canUseTool: async (name, toolInput) => (name.startsWith(TOOL_PREFIX) ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: `${name} is not available in Roamies.` }),
+    canUseTool: async (name, toolInput) => (name.startsWith(TOOL_PREFIX) ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: `${name} is not available in My Buddy.` }),
     includePartialMessages: true,
     pathToClaudeCodeExecutable: o.executable,
     env: { ...(o.env ?? process.env), CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH: String(MAX_TOOL_DESCRIPTION) },

@@ -26,7 +26,7 @@ const calls = [];
 const exec = (out, code = 0) => async (cmd, args) => { calls.push([cmd, ...args]); return args[0] === 'query' ? { code, stdout: out } : { code: 0, stdout: '' }; };
 assert.equal(await showTrayIcon({ exe, exec: exec(OUT) }), 'shown');
 assert.deepEqual(calls.at(-1), ['reg', 'add', 'HKEY_CURRENT_USER\\Control Panel\\NotifyIconSettings\\1234567890', '/v', 'IsPromoted', '/t', 'REG_DWORD', '/d', '1', '/f']);
-assert.equal(calls.filter((c) => c[1] === 'add').length, 1, "only Roamies' own entry is changed");
+assert.equal(calls.filter((c) => c[1] === 'add').length, 1, "only My Buddy's own entry is changed");
 assert.equal(await showTrayIcon({ exe, exec: exec('', 1) }), 'missing', 'no entries yet (Windows 10, or Explorer has not added it)');
 assert.equal(await showTrayIcon({ exe: 'C:\\x\\Elsewhere\\roamies.exe', exec: exec(OUT) }), 'missing');
 assert.equal(await showTrayIcon({ exe, exec: async (c, a) => (a[0] === 'query' ? { code: 0, stdout: OUT } : { code: 1, stdout: '' }) }), 'failed');

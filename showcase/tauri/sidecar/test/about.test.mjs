@@ -7,15 +7,15 @@ const mac = aboutRoamies({ ...base, mac: true, snap: true, pointer: true, voice:
 const win = aboutRoamies(base);
 const linux = aboutRoamies({ ...base, linux: true, voice: true, wake: true });
 assert.match(mac, /lives in the menu bar at the top of the screen/);
-assert.match(mac, /Show JARVIS, Ask JARVIS…, Ask About an Area…, Stop, Quit Roamies/);
+assert.match(mac, /Show JARVIS, Ask JARVIS…, Ask About an Area…, Stop, Quit My Buddy/);
 assert.match(mac, /Look: Roamie, JARVIS or Anime Girl/);
-assert.match(mac, /Wake word \(say "Hey Roamies"/);
+assert.match(mac, /Wake word \(say "Hey Buddy"/);
 assert.match(mac, /Voice Provider: Fish Audio, Gemini or VoiceStudio/);
 assert.match(win, /bottom right of the taskbar/);
 assert.ok(!/Ask About an Area|Wake word|Voice Control|Cursor, a little arrow/.test(win), 'features this copy lacks are left out');
 assert.match(linux, /AppIndicator extension/);
-assert.match(linux, /installs? by themselves when Roamies runs as an AppImage/);
-assert.match(linux, /Wake word \(say "Hey Roamies"/, 'the wake word on Windows and Linux too (#97)');
+assert.match(linux, /installs? by themselves when My Buddy runs as an AppImage/);
+assert.match(linux, /Wake word \(say "Hey Buddy"/, 'the wake word on Windows and Linux too (#97)');
 // The settings pages as the panel names them (Speaking, Listening, Shortcuts, General since the split; Routines is an Abilities tab).
 assert.match(mac, /Speaking \(Replies:.*Listening \(Voice Control.*Shortcuts \(.*General \(Sound Effects/);
 assert.match(linux, /Shortcuts \(the commands to bind/, 'no global keys there: the commands to bind');

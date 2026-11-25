@@ -648,7 +648,8 @@
       x = S0[0] + (SW - w * k) / 2; y = S0[1] + Math.max(8, (SH - h * k) / 2);
     } else {
       const fit = Math.max(1, Math.min((S0[2] - S0[0] - 32) / (w + 8), (S0[3] - S0[1] - 100) / (h + 14)));
-      k = Math.min(m.card_size === 'small' ? 0.8 : m.card_size === 'large' ? 1.5 : 1, fit);
+      // Appearance > Card size scales every card on top of the size the assistant chose (still never past the screen).
+      k = Math.min((m.card_size === 'small' ? 0.8 : m.card_size === 'large' ? 1.5 : 1) * (R.ink.scale || 1), fit);
       [x, y] = roomFor(Math.round(w * k), Math.round(h * k), m.part);
     }
     const bar = o.bar === false ? 0 : 26;
@@ -985,8 +986,10 @@
       }
       const c = await card(m, w, h, function (b, l, t, x, y, age) {
         const u = clamp(age / 1, 0, 1);
-        if (ready) for (const [gx, gy, v] of cells) { if ((B4[(gy % 4) * 4 + (gx % 4)] + 0.5) / 16 > u * 1.05) continue; b.fillStyle = LED[v]; b.fillRect(x + ix + gx * 3, y + 12 + gy * 3, 3, 3); }
-        else { b.fillStyle = 'rgba(14, 52, 96,0.25)'; b.fillRect(x + ix, y + 12, pw, ph); typed(b, 'no picture found', x + w / 2, y + 12 + ph / 2, SMALL, DIM, 1, { anchor: 'middle' }); }
+        // My Buddy: the photo itself, in colour (the LED dots made faces and diagrams hard to make out).
+        if (ready && img) { b.save(); b.globalAlpha = u; b.imageSmoothingEnabled = true; b.drawImage(img, x + ix, y + 12, pw, ph); b.restore(); }
+        else if (ready) for (const [gx, gy, v] of cells) { if ((B4[(gy % 4) * 4 + (gx % 4)] + 0.5) / 16 > u * 1.05) continue; b.fillStyle = LED[v]; b.fillRect(x + ix + gx * 3, y + 12 + gy * 3, 3, 3); }
+        else { b.fillStyle = 'rgba(14, 52, 96,0.25)'; b.fillRect(x + ix, y + 12, pw, ph); typed(b, m.offline ? 'no internet, so no picture' : 'no picture found', x + w / 2, y + 12 + ph / 2, SMALL, DIM, 1, { anchor: 'middle' }); }
         capRows.forEach((r, i) => typed(b, r, x + w / 2, y + capY + i * capLh, CAPF, TEXT, (age - 0.6 - i * 0.15) / 0.5, { anchor: 'middle' }));
         credRows.forEach((r, i) => typed(b, r, x + w / 2, y + credY + i * 14, `400 10px ${SANS}`, DIM, (age - 0.8) / 0.4, { anchor: 'middle' }));
         named.forEach((q, i) => {
@@ -1078,11 +1081,12 @@
     },
     molecule: (m) => drawMolecule(m),
     async model(m) {
-      const w = 320, h = 26 + 236, view3d = R.ink3d?.create(m.parts, w - 24, 210);
+      const w = 320, h = 26 + 236, view3d = R.ink3d?.create(m.parts, w - 24, 210, { smooth: true, colors: { ...TONES, accent: '#64748b', white: '#e5e7eb' } });
       await card(m, w, h, function (b, l, t, x, y, age) {
         if (!view3d) { typed(b, '3D isn’t available here', x + w / 2, y + 100, SMALL, DIM, 1, { anchor: 'middle' }); return; }
         const u = clamp(age / 0.8, 0, 1), f = view3d.frame(reduced() ? 0 : t);
-        for (let i = 0; i < f.lv.length; i++) { const v = f.lv[i]; if (!v) continue; const gx = i % f.gw, gy = (i / f.gw) | 0; if ((B4[(gy % 4) * 4 + (gx % 4)] + 0.5) / 16 > u * 1.05) continue; b.fillStyle = LED[v]; b.fillRect(x + 12 + gx * 3, y + 6 + gy * 3, 3, 3); }
+        if (f.canvas) { b.save(); b.globalAlpha = u; b.drawImage(f.canvas, x + 12, y + 6, f.gw * 3, f.gh * 3); b.restore(); }
+        else for (let i = 0; i < f.lv.length; i++) { const v = f.lv[i]; if (!v) continue; const gx = i % f.gw, gy = (i / f.gw) | 0; if ((B4[(gy % 4) * 4 + (gx % 4)] + 0.5) / 16 > u * 1.05) continue; b.fillStyle = LED[v]; b.fillRect(x + 12 + gx * 3, y + 6 + gy * 3, 3, 3); }
         // Labels follow their parts as it turns; one that would land on another this frame waits its turn.
         if (u >= 1) { const took = []; for (const lab of f.labels) { const lx = x + 12 + lab.x, ly = y + 6 + lab.y, r = [lx - 2, ly - 14, textW(lab.text, `600 10px ${SANS}`) + 10, 16]; if (took.some((q) => overlap(q, r) > 0)) continue; took.push(r); b.fillStyle = ACC; b.fillRect(lx - 1.5, ly - 1.5, 3, 3); typed(b, lab.text, lx + 6, ly - 4, `600 10px ${SANS}`, TEXT, 1, { rim: 3 }); } }
       }, { title: m.title || m.label || 'model', live: () => !!view3d && !reduced() });
@@ -2389,7 +2393,7 @@
     return out;
   };
   R.ink = {
-    send: null, invoke: null,
+    send: null, invoke: null, scale: 1,
     // A segment of a drawing from the sidecar: { id, seg, beats, edits, last, win, busy }.
     play(e) { G.q.push(e); pump(); },
     // { screen: true } clears the screen marks (cards stay); otherwise everything but the reminders card, which

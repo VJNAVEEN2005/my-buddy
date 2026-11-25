@@ -745,20 +745,20 @@ fn intro_at_tray(app: &AppHandle, tray: Option<tauri::Rect>, text: &str) {
 
 // ---------- menu bar icon ----------
 
-/// The Buddy icon: a round orb with two eyes, as a 12×12 grid.
+/// The Nova icon: a cat-eared hood around a dark face with two lit eyes, as a 12×12 grid.
 const TRAY_ART: [&str; 12] = [
-    "............",
-    "....####....",
+    ".#........#.",
+    ".##......##.",
+    ".###....###.",
+    ".##########.",
+    "###......###",
+    "##........##",
+    "##.##..##.##",
+    "##........##",
+    "###......###",
+    ".##########.",
     "..########..",
-    ".##########.",
-    ".##########.",
-    "###.####.###",
-    "###.####.###",
-    "############",
-    ".##########.",
-    ".##########.",
-    "..########..",
-    "....####....",
+    "...##..##...",
 ];
 
 /// Renders the grid as solid 3 px cells (36 px = 18 pt at 2x). Black on transparent, used
@@ -1871,7 +1871,7 @@ fn login_item(app: &AppHandle, set: Option<bool>) {
 fn update(app: &AppHandle, install: bool) {
     // ponytail: My Buddy has no update feed yet, and the Roamies feed would install Roamies over it. Point
     // plugins.updater at your own signed latest.json and delete these two lines to switch updates back on.
-    to_sidecar(app, &json!({ "type": "update_status", "state": "none" }));
+    to_sidecar(app, &json!({ "type": "update_status", "state": "off" }));
     return;
     use tauri_plugin_updater::UpdaterExt;
     let app = app.clone();
@@ -1941,6 +1941,8 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
             }
         }
         Some("panel_show") => show_panel(app, None, false),
+        // The sidecar hides the panel when what it starts should be seen (a quiz, the weekly report).
+        Some("panel_hide") => hide_panel(app, "sidecar"),
         Some("diagnostics") => {
             let app = app.clone();
             thread::spawn(move || to_sidecar(&app, &diagnostics(&app)));

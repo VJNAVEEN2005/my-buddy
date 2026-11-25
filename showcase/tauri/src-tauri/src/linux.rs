@@ -49,7 +49,7 @@ pub(crate) fn init() {
         if env("DISPLAY").is_some_and(|d| !d.is_empty()) {
             std::env::set_var("GDK_BACKEND", "x11");
         } else {
-            eprintln!("Roamies needs XWayland on a Wayland session (no DISPLAY is set): windows can't be placed or kept on top without it");
+            eprintln!("My Buddy needs XWayland on a Wayland session (no DISPLAY is set): windows can't be placed or kept on top without it");
         }
     }
 }
@@ -508,7 +508,7 @@ fn exec_quoted(path: &str) -> Option<String> {
 /// The XDG autostart entry that starts Roamies when the user logs in.
 fn autostart_entry(program: &str) -> Option<String> {
     let exec = exec_quoted(program)?;
-    Some(format!("[Desktop Entry]\nType=Application\nName=Roamies\nComment=AI desktop companions\nExec={exec}\nIcon=roamies\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"))
+    Some(format!("[Desktop Entry]\nType=Application\nName=My Buddy\nComment=AI desktop companions\nExec={exec}\nIcon=roamies\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"))
 }
 
 /// Whether an autostart entry is switched on: desktops' own "startup apps" settings switch one off by adding
@@ -604,9 +604,9 @@ mod tests {
 
     #[test]
     fn the_autostart_entry_quotes_the_program() {
-        let e = autostart_entry("/home/kai/Apps/Roamies 0.1.33.AppImage").expect("an entry");
-        assert!(e.starts_with("[Desktop Entry]\nType=Application\nName=Roamies\n"));
-        assert!(e.contains("\nExec=\"/home/kai/Apps/Roamies 0.1.33.AppImage\"\n"), "{e}");
+        let e = autostart_entry("/home/kai/Apps/My Buddy 0.1.33.AppImage").expect("an entry");
+        assert!(e.starts_with("[Desktop Entry]\nType=Application\nName=My Buddy\n"));
+        assert!(e.contains("\nExec=\"/home/kai/Apps/My Buddy 0.1.33.AppImage\"\n"), "{e}");
         assert_eq!(exec_quoted("/usr/bin/roamies").as_deref(), Some("\"/usr/bin/roamies\""));
         // Characters a shell or the desktop would act on stay literal.
         assert_eq!(exec_quoted("/opt/a$b/50%/q\"t/b`t").as_deref(), Some("\"/opt/a\\\\$b/50%%/q\\\\\"t/b\\\\`t\""));
@@ -619,8 +619,8 @@ mod tests {
     fn the_command_to_bind_names_this_copy() {
         assert_eq!(launch_word("/usr/bin/roamies"), "roamies", "the package's own command");
         assert_eq!(launch_word("/home/kai/Apps/Roamies_0.1.33_amd64.AppImage"), "/home/kai/Apps/Roamies_0.1.33_amd64.AppImage");
-        assert_eq!(launch_word("/home/kai/My Apps/Roamies.AppImage"), "'/home/kai/My Apps/Roamies.AppImage'");
-        assert_eq!(launch_word("/home/kai/it's/Roamies"), "'/home/kai/it'\\''s/Roamies'");
+        assert_eq!(launch_word("/home/kai/My Apps/My Buddy.AppImage"), "'/home/kai/My Apps/My Buddy.AppImage'");
+        assert_eq!(launch_word("/home/kai/it's/My Buddy"), "'/home/kai/it'\\''s/My Buddy'");
     }
 
     #[test]

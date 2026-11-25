@@ -601,6 +601,9 @@ html, body {
 /* Card Groups (White Theme Cards with subtle border) */
 .group {
   display: grid;
+  /* One column that can shrink: a wide row of choices (the Talk keys) wraps inside the card instead of
+     stretching the grid past it. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--step);
   min-width: 0;
   background: var(--panel);
@@ -1635,9 +1638,14 @@ html, body {
 .subj-bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .subj-bar i { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
 .subj-n { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.mock-spark { display: block; width: 220px; height: 44px; color: var(--ink); margin-top: 4px; overflow: visible; }
+.mock-spark { display: block; width: 100%; height: auto; color: var(--ink); margin-top: 4px; overflow: visible; }
 .mock-spark circle { fill: var(--panel); stroke: currentColor; stroke-width: 1.5; }
-.mock-spark circle:last-of-type { fill: currentColor; }
+.mock-spark circle.last { fill: currentColor; }
+.mock-spark text { font: 500 10px var(--font); fill: var(--ink-3); }
+.mock-spark text.val { fill: var(--ink-2); font-weight: 600; }
+.mock-spark .grid { stroke: var(--line); stroke-width: 1; }
+.mock-spark .goal { stroke: var(--ok, #16a34a); stroke-width: 1; stroke-dasharray: 4 3; }
+.mock-spark text.goal-t { fill: var(--ok, #16a34a); }
 
 /* Fixed keys on the Keybindings page: the keys themselves, set like keycaps. */
 .keys { font: 600 11px/1 var(--font); color: var(--ink); background: var(--panel); border: 1px solid var(--line-hi); border-bottom-width: 2px; border-radius: 5px; padding: 4px 7px; white-space: nowrap; }
@@ -1733,3 +1741,42 @@ html, body {
 .maker > span small { font: 400 12px/1.3 var(--font); color: var(--ink-3); }
 .credit { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-3); }
 .credit .link, .credit button { font-size: 11.5px !important; font-weight: 500 !important; color: var(--ink-2) !important; padding: 0 !important; }
+
+/* Study: cards in a tab sit apart like the cards on every other page (they touched). */
+.tabpanel > * + * { margin-top: var(--group); }
+.tabpanel > .exam-pick + * { margin-top: 0; }
+
+/* Study: add and edit by hand. A small form opens in place under its button. */
+.study-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.study-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.study-form .field-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.study-form .field-group.span-2 { grid-column: 1 / -1; }
+.study-form label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.study-form input, .study-form select, .study-form textarea {
+  font: 13px/1.4 var(--font); color: var(--ink); background: var(--panel); border: 1px solid var(--line-hi);
+  border-radius: 8px; padding: 8px 10px; min-width: 0; width: 100%; box-sizing: border-box;
+}
+.study-form textarea { min-height: 84px; resize: vertical; }
+.study-form input:focus-visible, .study-form select:focus-visible, .study-form textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.study-form .form-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; }
+.study-form .form-err { grid-column: 1 / -1; color: var(--danger); font-size: 12px; margin: 0; }
+@media (max-width: 760px) { .study-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Study: the focus timer and the streak. */
+.focus-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.focus-clock { font: 700 30px/1 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.focus-row .study-tools { margin-left: auto; }
+.streak { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.streak-days { display: flex; gap: 6px; }
+.streak-days span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-hi);
+  font: 600 10px/1 var(--font); color: var(--ink-3); }
+.streak-days span.on { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.streak-days span.today { outline: 2px solid var(--ink-3); outline-offset: 1px; }
+
+/* Study, Cards: the flashcard being reviewed (question, then the answer under a rule once shown). */
+.flash { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; min-height: 86px; display: grid; gap: 12px; align-content: center; background: var(--bg); }
+.flash-front { margin: 0; font: 600 17px/1.4 var(--display); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.flash-back { margin: 0; padding-top: 12px; border-top: 1px dashed var(--line); font-size: 15px; line-height: 1.45; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.flash + .study-tools { margin-top: 12px; }
+.flash + .study-tools .row-btns { margin-left: auto; }
+.study-form .form-ok { grid-column: 1 / -1; color: var(--ink-2); font-size: 12px; margin: 0; }

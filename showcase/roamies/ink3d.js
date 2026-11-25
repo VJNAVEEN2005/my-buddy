@@ -56,10 +56,10 @@
   const VS = `attribute vec3 p; attribute vec3 n; uniform mat4 mvp; uniform mat4 model; varying vec3 vn; varying vec3 vp;
     void main(){ vec4 w = model * vec4(p, 1.0); vp = w.xyz; vn = (model * vec4(n, 0.0)).xyz; gl_Position = mvp * vec4(p, 1.0); }`;
   // glass: a casing with parts inside it is drawn as every other cell, so what moves inside shows through.
-  const FS = `precision mediump float; varying vec3 vn; varying vec3 vp; uniform float k; uniform vec3 eye; uniform float glass;
-    void main(){ if (glass > 0.5 && mod(floor(gl_FragCoord.x / 2.0) + floor(gl_FragCoord.y / 2.0), 2.0) < 0.5) discard; vec3 N = normalize(vn); vec3 L = normalize(vec3(-0.45, 0.75, 0.55)); vec3 Vd = normalize(eye - vp);
+  const FS = `precision mediump float; varying vec3 vn; varying vec3 vp; uniform float k; uniform vec3 eye; uniform float glass; uniform vec3 col; uniform float soft;
+    void main(){ if (glass > 0.5 && soft < 0.5 && mod(floor(gl_FragCoord.x / 2.0) + floor(gl_FragCoord.y / 2.0), 2.0) < 0.5) discard; vec3 N = normalize(vn); vec3 L = normalize(vec3(-0.45, 0.75, 0.55)); vec3 Vd = normalize(eye - vp);
       float lam = max(dot(N, L), 0.0), rim = pow(1.0 - max(dot(N, Vd), 0.0), 2.2);
-      float v = clamp((0.16 + 0.72 * lam + 0.42 * rim) * k, 0.0, 1.0); gl_FragColor = vec4(v, v, v, 1.0); }`;
+      float v = clamp((0.16 + 0.72 * lam + 0.42 * rim) * k, 0.0, 1.0); gl_FragColor = vec4(mix(col * (0.25 + 0.85 * v), vec3(1.0), rim * 0.25), glass > 0.5 && soft > 0.5 ? 0.32 : 1.0); }`;
 
   // How a part moves, each a loop of `secs` seconds: spin turns it in place about a world axis, orbit carries it round a
   // point (turning with it, like a blade on a hub), slide takes it to `to` and back, pulse swells and shrinks it.
@@ -80,23 +80,27 @@
 
   /** A model from parts [{shape, at, size, rot (degrees), tone, label, motion}], drawn into a cell grid (3 px cells) w × h px.
    *  frame(t) → { gw, gh, lv: levels 0 (empty) … 4, labels: [{x, y, text}] in px within the area }. null without WebGL. */
-  function create(parts, w, h) {
-    const gw = Math.max(8, Math.floor(w / 3)), gh = Math.max(8, Math.floor(h / 3)), SS = 2;
+  // smooth: { colors: tone → [r, g, b] 0…1 } draws a full-colour, antialiased model instead of LED cells; frame() then
+  // returns { canvas, labels } for ink.js to paint as an image (My Buddy's default: the dot look was hard to read).
+  const hex = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ''); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+  function create(parts, w, h, opts = {}) {
+    const smooth = !!opts.smooth;
+    const gw = Math.max(8, Math.floor(w / 3)), gh = Math.max(8, Math.floor(h / 3)), SS = smooth ? 6 : 2;
     const cv = document.createElement('canvas'); cv.width = gw * SS; cv.height = gh * SS;
-    const gl = cv.getContext('webgl', { antialias: false, preserveDrawingBuffer: true, alpha: true });
+    const gl = cv.getContext('webgl', { antialias: smooth, preserveDrawingBuffer: true, alpha: true });
     if (!gl) return null;
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
     const prog = gl.createProgram();
     try { gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); } catch (e) { console.error('ink3d', e); return null; }
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
     gl.useProgram(prog);
-    const loc = { p: gl.getAttribLocation(prog, 'p'), n: gl.getAttribLocation(prog, 'n'), mvp: gl.getUniformLocation(prog, 'mvp'), model: gl.getUniformLocation(prog, 'model'), k: gl.getUniformLocation(prog, 'k'), eye: gl.getUniformLocation(prog, 'eye'), glass: gl.getUniformLocation(prog, 'glass') };
+    const loc = { p: gl.getAttribLocation(prog, 'p'), n: gl.getAttribLocation(prog, 'n'), mvp: gl.getUniformLocation(prog, 'mvp'), model: gl.getUniformLocation(prog, 'model'), k: gl.getUniformLocation(prog, 'k'), col: gl.getUniformLocation(prog, 'col'), soft: gl.getUniformLocation(prog, 'soft'), eye: gl.getUniformLocation(prog, 'eye'), glass: gl.getUniformLocation(prog, 'glass') };
     const cache = {};
     const buf = (data) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW); return b; };
     const items = parts.slice(0, 40).map((q) => {
       const g = (cache[q.shape] ??= (() => { const [p, n] = SHAPES[q.shape](); return { p: buf(p), n: buf(n), count: p.length / 3 }; })());
       const [x, y, z] = q.at ?? [0, 0, 0], [sx, sy, sz] = q.size ?? [0.5, 0.5, 0.5], [rx, ry, rz] = (q.rot ?? [0, 0, 0]).map((d) => (d * Math.PI) / 180);
-      return { g, turn: mul(RZ(rz), mul(RY(ry), RX(rx))), size: [sx, sy, sz], motion: q.motion, k: TONE_K[q.tone] ?? 1, label: q.label, at: [x, y, z], r: Math.max(sx, sy, sz) * (q.motion?.do === 'pulse' ? 1.14 : 1) };
+      return { g, turn: mul(RZ(rz), mul(RY(ry), RX(rx))), size: [sx, sy, sz], motion: q.motion, k: smooth ? 1 : TONE_K[q.tone] ?? 1, col: (smooth && (hex(opts.colors?.[q.tone ?? 'accent']) ?? hex(opts.colors?.accent))) || [1, 1, 1], label: q.label, at: [x, y, z], r: Math.max(sx, sy, sz) * (q.motion?.do === 'pulse' ? 1.14 : 1) };
     });
     // Fit the whole model in view, wherever its parts move to: centre it and scale its bounding sphere to about one unit.
     const reach = items.map((it) => (it.motion ? Array.from({ length: 8 }, (_, k) => moved(it, (k / 8) * Math.max(0.3, Math.min(60, it.motion.secs ?? CYCLE[it.motion.do]))).at) : [it.at]));
@@ -108,8 +112,9 @@
     // Unit shapes reach about 0.5 from their centre (a box's corner a little more), times their size.
     const rad = Math.max(0.3, ...items.flatMap((it, n) => reach[n].map((q) => Math.hypot(...q.map((v, i) => v - c[i])) + it.r * 0.6)));
     const fit = mul(S(1 / rad, 1 / rad, 1 / rad), T(-c[0], -c[1], -c[2]));
-    const px = new Uint8Array(gw * SS * gh * SS * 4), lv = new Uint8Array(gw * gh);
+    const px = new Uint8Array(smooth ? 4 : gw * SS * gh * SS * 4), lv = new Uint8Array(gw * gh);
     let lastT = -1, out = { gw, gh, lv, labels: [] };
+    if (smooth) { gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); }
     gl.enable(gl.DEPTH_TEST); gl.viewport(0, 0, gw * SS, gh * SS);
     return {
       frame(t) {
@@ -117,21 +122,21 @@
         if (lastT >= 0 && Math.abs(t - lastT) < 1 / 30) return out;
         lastT = t;
         const view = mul(T(0, 0, -3.4), mul(RX(0.38), RY(t * 0.45 + 0.6))), proj = persp(0.62, gw / gh, 0.1, 20), vp = mul(proj, view);
-        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.depthMask(true); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.uniform3fv(loc.eye, [0, 0, 3.4]);
         const now = items.map((it) => moved(it, t));
-        for (const [n, it] of items.entries()) {
+        for (const [n, it] of (smooth ? [...items.entries()].sort((a, b) => a[1].glass - b[1].glass) : items.entries())) {
           const model = mul(view, mul(fit, now[n].local));
           gl.uniformMatrix4fv(loc.model, false, new Float32Array(model));
           gl.uniformMatrix4fv(loc.mvp, false, new Float32Array(mul(proj, model)));
-          gl.uniform1f(loc.k, it.k); gl.uniform1f(loc.glass, it.glass ? 1 : 0);
+          gl.uniform1f(loc.k, it.k); gl.uniform3fv(loc.col, it.col); gl.uniform1f(loc.soft, smooth ? 1 : 0); gl.depthMask(!(smooth && it.glass)); gl.uniform1f(loc.glass, it.glass ? 1 : 0);
           gl.bindBuffer(gl.ARRAY_BUFFER, it.g.p); gl.enableVertexAttribArray(loc.p); gl.vertexAttribPointer(loc.p, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ARRAY_BUFFER, it.g.n); gl.enableVertexAttribArray(loc.n); gl.vertexAttribPointer(loc.n, 3, gl.FLOAT, false, 0, 0);
           gl.drawArrays(gl.TRIANGLES, 0, it.g.count);
         }
-        gl.readPixels(0, 0, gw * SS, gh * SS, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        if (!smooth) gl.readPixels(0, 0, gw * SS, gh * SS, gl.RGBA, gl.UNSIGNED_BYTE, px);
         const W2 = gw * SS;
-        for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+        if (!smooth) for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
           let v = 0, a = 0;
           for (let j = 0; j < SS; j++) for (let i = 0; i < SS; i++) { const o = (((gh - 1 - gy) * SS + j) * W2 + gx * SS + i) * 4; v += px[o]; a += px[o + 3]; }
           if (a < 255 * SS * SS * 0.4) { lv[gy * gw + gx] = 0; continue; }
@@ -146,7 +151,7 @@
           if (q[3] <= 0) continue;
           labels.push({ x: ((q[0] / q[3]) * 0.5 + 0.5) * gw * 3, y: (1 - ((q[1] / q[3]) * 0.5 + 0.5)) * gh * 3, text: it.label });
         }
-        out = { gw, gh, lv, labels };
+        out = { gw, gh, lv, labels, canvas: smooth ? cv : null };
         return out;
       },
     };

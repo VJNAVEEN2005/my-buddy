@@ -23,7 +23,7 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The entry the front window matches ({ app, title, url }), or null. Roamies itself never counts. */
 export function distraction(front, list = DEFAULT_DISTRACTIONS) {
-  if (!front?.app || /^roamies$/i.test(front.app)) return null;
+  if (!front?.app || /^(roamies|my buddy)$/i.test(front.app)) return null;
   const host = front.url ? hostOf(front.url) : '';
   const app = String(front.app).toLowerCase(), title = String(front.title ?? '');
   for (const entry of list) {

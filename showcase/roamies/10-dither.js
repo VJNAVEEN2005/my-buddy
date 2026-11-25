@@ -48,9 +48,11 @@
       let form = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('form')) || 'default', lastEnv = null;
       let userForm = form;
       // Look: 'classic' (the goo blob, and the arrow at cursor size), 'jarvis' (roamies/jarvis.js: a globe of
-      // points with a lit heart, and a HUD reticle at cursor size) or a character from roamies/people.js
-      // ('anime', 'sarah', 'adrian', 'rita', 'ultren', 'glayos'). Moves, sizes and everything else are shared.
-      const drawn = (l) => (l === 'jarvis' ? Roamie.jarvis : Roamie.people?.[l]);
+      // points with a lit heart, and a HUD reticle at cursor size), or 'cosmo' (roamies/cosmo.js).
+      // Moves, sizes and everything else are shared.
+      const drawn = (l) => (l === 'jarvis' ? Roamie.jarvis : l === 'cosmo' ? Roamie.cosmo : l === 'peri' || l === 'nova' || l === 'sprout' ? Roamie[l] : Roamie.people?.[l]);
+      // A vector look (Peri) is smooth art painted on the canvas in draw(), not LED cells on the grid.
+      const vectorLook = () => { const J = drawn(look); return J?.vector ? J : null; };
       const pickLook = (l) => (drawn(l) ? l : 'classic');
       let look = pickLook(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('look') : null);
       const jst = { spin: 0, dt: 0.016 };
@@ -222,7 +224,7 @@
         rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === '#') for (let a = 0; a < sc; a++) for (let b = 0; b < sc; b++) put(x0 + 2 + i * sc + b, y0 + 2 + j * sc + a, ink); });
       };
       const drawHands = (bx, by) => {
-        if (arms < 0.12 || form === 'cursor' || look === 'jarvis') return;
+        if (arms < 0.12 || form === 'cursor' || look === 'jarvis' || vectorLook()) return;
         // Floating mitts, no arms: they pop out of the body edge and stay readable over it.
         const hr = Math.max(2, Math.round(((R * 0.25) / P) * Math.min(1, arms * 1.25)));
         for (const h of hands) {
@@ -361,7 +363,7 @@
           }
         } else {
           m.stretch = Roamie.damp(m.stretch, 0, 8, dt);
-          if (p.v === 'materialize' && p.state === 'in' && u < 0.7) {
+          if (p.v === 'materialize' && p.state === 'in' && u < 0.7 && !vectorLook()?.entry) {
             // sparks converge on the body from a ring around it
             for (let i = 0; i < Math.ceil(dt * 90); i++) {
               const a = rand(0, Math.PI * 2), r0 = R * rand(1.6, 2.4), sp = r0 / 0.42;
@@ -418,7 +420,7 @@
         }
         if (u < 0.42) { const a = smooth(u / 0.42); return { sx: 1 + 0.3 * a, sy: 1 - 0.97 * a, line: a, flash: a * 0.9, dot: 0 }; }
         if (u < 0.78) { const b = smooth((u - 0.42) / 0.36); return { sx: 1.3 * (1 - b), sy: 0.03, line: 1, flash: 0.9, dot: b }; }
-        const c = (u - 0.78) / 0.22; return { sx: 0, sy: 0.03, line: 0, flash: 0, dot: 1 - c };
+        const c = (u - 0.78) / 0.22; return { sx: 0, sy: 0.03, line: 0, flash: 0, dot: Math.max(0, 1 - c * 1.3) };
       };
 
       // Morph between its size and its cursor form (for drawings). The body has no in-between sizes, so the finished
@@ -464,6 +466,9 @@
         const f = ['small', 'cursor'].includes(to) ? to : 'default';
         if (mo) { const r = mo.res; if (!mo.swapped) swapForm(mo.to); mo = null; r(); }
         if (f === form) { res(); return; }
+        // A look with its own character-to-cursor clip (sprites.js) plays that instead: swap now, settle when it ends.
+        const TC = vectorLook()?.toCursor;
+        if (TC && (f === 'cursor' || form === 'cursor') && !lastEnv?.reduced && pres.state === 'shown') { swapForm(f); setTimeout(res, ((TC.n - (TC.skip || 0)) / TC.fps) * 1000); return; }
         const toCursor = f === 'cursor', style = MORPHS.filter((x) => x !== lastMorph)[Math.floor(Math.random() * (MORPHS.length - 1))];
         lastMorph = style;
         const small = rand(0.32, 0.45);
@@ -484,22 +489,30 @@
         if (!J) return;
         const A = act?.name;
         Object.assign(jst, {
-          t, mode: pose?.mode ?? null, heard: pose?.heard, voice: window.Roamie.voiceOut?.playing() ? window.Roamie.voiceOut.level() : null, act: A ?? null, actA: act?.a ?? 0,
+          form, t, mode: pose?.mode ?? null, heard: pose?.heard, voice: window.Roamie.voiceOut?.playing() ? window.Roamie.voiceOut.level() : null, act: A ?? null, actA: act?.a ?? 0,
           open: face.open, look: [face.lookX, face.lookY], speed: m.speed, vx: m.vx, sq: sq.x,
           wide: face.wide, dizzy: face.dizzy, happy: face.happy, sleepy: Math.max(env.sleepy ?? 0, face.sleepy ?? 0),
           mouth: pose?.mouth ?? (act && { wave: null, hype: 'shout', remind: 'o', upset: 'frown', motivate: 'grin' }[A]),
           brow: pose ? pose.brow : A === 'upset' ? 'angry' : A === 'motivate' ? 'determined' : A === 'remind' ? 'raised' : null,
           rest: pose?.rest ?? null, feel: pose?.feel ?? null, // the voice's feeling: the mouth between words, and JARVIS's heart
         });
+        if (J.vector) {
+          Object.assign(jst, { arms, hands: hands.map((h) => [h.o.x / R, h.o.y / R]), actDur: act?.dur ?? 3,
+            hot: [(Math.round(bx / P) - AX) * P, (Math.round(by / P) - AY) * P] });
+          const e = J.extent, k = form === 'cursor' ? 26 : R;
+          const x0 = Math.floor((bx - k * e.l) / P), x1 = Math.ceil((bx + k * e.r) / P), y0 = Math.floor((by - k * e.t) / P), y1 = Math.ceil((by + k * e.b) / P);
+          dx0 = Math.max(0, Math.min(dx0, x0)); dy0 = Math.max(0, Math.min(dy0, y0)); dx1 = Math.min(gw - 1, Math.max(dx1, x1)); dy1 = Math.min(gh - 1, Math.max(dy1, y1));
+          return;
+        }
         // The globe's points overlap (the brightest wins); a character is drawn in layers (the last one wins).
+        const k = { put, L, th, setPx, P, PAL, clamp };
         if (look !== 'jarvis') {
-          const k = { put, L, th };
           if (form === 'cursor') J.cursor(k, Math.round(bx / P), Math.round(by / P), Math.round(bx / P) - AX, Math.round(by / P) - AY, jst);
           else J.body(k, bx / P, by / P, R / P, jst);
           return;
         }
-        const k = { put: jput, L, th };
-        if (form === 'cursor') J.cursor(k, Math.round(bx / P), Math.round(by / P), Math.round(bx / P) - AX, Math.round(by / P) - AY, jst);
+        const jk = { ...k, put: jput };
+        if (form === 'cursor') J.cursor(jk, Math.round(bx / P), Math.round(by / P), Math.round(bx / P) - AX, Math.round(by / P) - AY, jst);
         else {
           // A faint projector glow on the floor under the hologram.
           const fy = (by + R * 1.3) / P, fw = (R * 0.75) / P;
@@ -507,7 +520,7 @@
             const u = 1 - Math.hypot(x / fw, y / 1.4);
             if (u > 0 && u * 0.9 > th(Math.round(bx / P) + x, Math.round(fy) + y)) jput(bx / P + x, fy + y, u > 0.5 ? 2 : 1);
           }
-          J.body(k, bx / P, by / P, R / P, jst);
+          J.body(jk, bx / P, by / P, R / P, jst);
         }
         jflush();
       };
@@ -763,7 +776,7 @@
             gy0 = clamp(Math.floor(y0 / P), 0, gh); gy1 = clamp(Math.ceil(y1 / P), 0, gh);
           }
           mask = null;
-          if (performing && pres.v === 'materialize') {
+          if (performing && pres.v === 'materialize' && !(pres.state === 'in' && vectorLook()?.entry)) {
             const e = front(), entering = pres.state === 'in', top = by - R * 1.3, H2 = R * 2.7, R2 = R * 1.4;
             mask = entering
               ? (gx, gy) => { const v = 0.55 * th(gx, gy) + 0.45 * clamp(Math.hypot((gx + 0.5) * P - bx, (gy + 0.5) * P - by) / R2, 0, 1); return v < e ? (v > e - 0.14 ? 2 : 1) : 0; }
@@ -829,7 +842,8 @@
           plug?.gridUnder?.(env);
           drawHands(bx, by);
           mask = null;
-          for (const q of parts) {
+          // A vector look has its own smooth sparkles, so the LED sparks are left out.
+          if (!vectorLook()) for (const q of parts) {
             const gx = Math.round(q.x / P), gy = Math.round(q.y / P);
             if (q.size === 1) disc(gx, gy, q.life > 0.5 ? 1 : 0, q.life > 0.5 ? 1 : 0, q.lvl);
             else if (q.size === 2 && q.life > 0.45) { put(gx, gy, q.lvl); put(gx - 1, gy, q.lvl - 1); put(gx + 1, gy, q.lvl - 1); put(gx, gy - 1, q.lvl - 1); put(gx, gy + 1, q.lvl - 1); }
@@ -842,7 +856,7 @@
             const gx = clamp(Math.round((bx + side * R * 0.95) / P), Math.ceil(((sf.left ?? 0) + R * 0.4) / P), Math.floor((env.w - (sf.right ?? 0) - R * 0.4) / P));
             const gy = Math.max(top, Math.round((by - R * 1.3) / P) - Math.round(Math.abs(Math.sin(act.a * 6))));
             if (look === 'jarvis') Roamie.jarvis?.readout({ put, L }, gx, gy, icon, act.a, act.dur, !(P < 6 && form === 'default'));
-            else bubble(gx, gy, icon);
+            else if (!vectorLook()) bubble(gx, gy, icon);
           }
           plug?.gridOver?.(env);
           pd = dx1 >= dx0 ? [dx0, dy0, dx1 + 1, dy1 + 1] : null;
@@ -868,7 +882,7 @@
           // A fingerprint of the picture: the lit cells, where the patch sits and the glide offset. NaN (never equal)
           // whenever something is also drawn outside the grid or the CRT effect is playing.
           let sig = NaN;
-          if (clear && pd && !performing && !crtXform() && !mo && (!plug || plug.quiet?.())) {
+          if (clear && pd && !performing && !crtXform() && !mo && !vectorLook() && (!plug || plug.quiet?.())) {
             let h = 2166136261 ^ (rect[0] * 73856093) ^ (rect[1] * 19349663) ^ (rect[2] * 83492791) ^ rect[3];
             for (let y = pd[1] * K; y < pd[3] * K; y++) for (let i = y * IW + pd[0] * K, e = y * IW + pd[2] * K; i < e; i++) h = Math.imul(h ^ u32[i], 16777619);
             const glide = !!m.drive && pres.state === 'shown';
@@ -905,6 +919,19 @@
             ctx.translate(bx, by - mx.lift); ctx.rotate(mx.rot); ctx.scale(Math.max(mx.sx, 0.0001), Math.max(mx.sy, 0.0001)); ctx.translate(-bx, -by);
           }
           if (!crt || crt.sx > 0.01) ctx.drawImage(off, sx, sy, sw, sh, X, Y, DW, DH);
+          const VJ = vectorLook();
+          if (VJ && (!crt || crt.sx > 0.01)) {
+            ctx.save();
+            ctx.imageSmoothingEnabled = true;
+            // The layer was slid by the glide offset above; the art is drawn where the body really is.
+            const gdx = glide ? Math.round((bx - Math.round(bx / P) * P) * dpr) / dpr : 0, gdy = glide ? Math.round((by - Math.round(by / P) * P) * dpr) / dpr : 0;
+            // Materialize: fades in as the sparkle front passes, and out as it leaves.
+            // A look with its own entrance clip plays that instead of the fade-in.
+            jst.entryU = VJ.entry && pres.v === 'materialize' && pres.state === 'in' ? pres.u : null;
+            if (pres.v === 'materialize' && (pres.state === 'out' || (pres.state === 'in' && jst.entryU == null))) ctx.globalAlpha = clamp(pres.state === 'in' ? front() : 1 - front(), 0, 1);
+            VJ.draw(ctx, bx - gdx, by - gdy, R, jst);
+            ctx.restore();
+          }
           if (crt && crt.flash > 0.01 && crt.sx > 0.01) {
             // over-exposed tube warming up / cooling down
             ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = crt.flash * 0.85;
@@ -932,10 +959,13 @@
               ctx.shadowColor = glow; ctx.shadowBlur = P * 4; ctx.globalAlpha = crt.line; ctx.fillStyle = hot;
               ctx.fillRect(bx - w / 2, by - h / 2, w, h);
             }
-            if (crt.dot > 0.01) {
+            if (crt.dot > 0.08) {
               const r = P * (0.6 + 1.6 * crt.dot);
-              ctx.shadowColor = glow; ctx.shadowBlur = P * 6 * crt.dot; ctx.globalAlpha = Math.min(1, crt.dot * 1.4); ctx.fillStyle = hot;
-              ctx.fillRect(bx - r, by - r, r * 2, r * 2);
+              const alpha = Math.max(0, (crt.dot - 0.15) / 0.85);
+              if (alpha > 0.01) {
+                ctx.shadowColor = glow; ctx.shadowBlur = P * 6 * crt.dot; ctx.globalAlpha = Math.min(1, alpha * 1.4); ctx.fillStyle = hot;
+                ctx.fillRect(bx - r, by - r, r * 2, r * 2);
+              }
             }
             ctx.restore();
           }

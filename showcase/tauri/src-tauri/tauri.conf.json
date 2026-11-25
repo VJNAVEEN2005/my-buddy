@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Roamies",
+  "productName": "My Buddy",
   "version": "0.1.49",
-  "identifier": "com.kenkai.roamies",
+  "identifier": "com.vjn.mybuddy",
   "build": {
     "frontendDist": "../dist"
   },
@@ -30,7 +30,7 @@
     "macOS": {
       "minimumSystemVersion": "13.5"
     },
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "externalBin": [
       "binaries/roamies-node"
     ]

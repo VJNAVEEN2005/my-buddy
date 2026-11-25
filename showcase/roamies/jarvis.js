@@ -1,5 +1,5 @@
-// JARVIS look for the sidekick: no face and no body, the way the films show Stark's AI. A globe of LED points
-// with a lit heart (the Wave Sphere study), rippled by the voice. The cursor form is a HUD reticle, and the
+// Buddy, the original look (its id is still 'jarvis'): no face and no body, a globe of LED points with a lit heart
+// (the Wave Sphere study), rippled by the voice. The cursor form is a HUD reticle, and the
 // moments the goo blob acts out (heart, bolt, alarm, anger, flame) become HUD read-outs here.
 // Everything else (following, bubbles, tools, sizes) is the same sidekick; 10-dither.js calls into this when
 // the look is 'jarvis'. Pure drawing: it only writes LED cells through the kit it's given.

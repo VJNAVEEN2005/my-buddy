@@ -40,6 +40,9 @@ mod imp {
 
     const VK_SHIFT: i32 = 0x10;
     const VK_CONTROL: i32 = 0x11;
+    const VK_LCONTROL: i32 = 0xA2;
+    const VK_RCONTROL: i32 = 0xA3;
+    const VK_MENU: i32 = 0x12;
     const VK_LMENU: i32 = 0xA4;
     const VK_RMENU: i32 = 0xA5;
     const VK_LWIN: i32 = 0x5B;
@@ -47,10 +50,10 @@ mod imp {
 
     pub fn held() -> Held {
         let mut mods = 0;
-        if down(VK_CONTROL) {
+        if down(VK_CONTROL) || down(VK_LCONTROL) || down(VK_RCONTROL) {
             mods |= CONTROL;
         }
-        if down(VK_LMENU) {
+        if down(VK_MENU) || down(VK_LMENU) || down(VK_RMENU) {
             mods |= OPTION;
         }
         if down(VK_SHIFT) {
@@ -59,7 +62,7 @@ mod imp {
         if down(VK_LWIN) || down(VK_RWIN) {
             mods |= COMMAND;
         }
-        Held { mods, altgr: down(VK_RMENU) }
+        Held { mods, altgr: false }
     }
 
     /// Any non-modifier key held (mouse buttons don't count).

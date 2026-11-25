@@ -188,7 +188,7 @@ assert.deepEqual(checkFolder('~/Cloud', TMP), { ok: true, dir: path.join(TMP, 'C
   assert.equal(broken.trusted, false, 'unreadable, backup too');
   assert.equal(broken.commitments.length, 0);
   const newer = await fresh('newer', { 'memory.json': JSON.stringify({ version: 2, commitments: [] }) });
-  assert.ok(newer.readOnly && !newer.trusted, 'memory from a newer Roamies');
+  assert.ok(newer.readOnly && !newer.trusted, 'memory from a newer My Buddy');
   delete process.env.ROAMIES_DATA_DIR;
 }
 console.log('sync tests: passed');

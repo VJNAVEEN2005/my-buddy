@@ -223,7 +223,7 @@ export function agentSystem(type, { dir, userName = 'the user', deliverTo = null
   const done = answer
     ? `When you're done, call finish once: outcome is one plain sentence under 90 characters; report is what you found or did, in plain text under 1,200 characters, the answer first and complete on its own; place (optional) is the folder, file or http(s) web address you worked on (the folder you tidied, the site you checked); files only if the brief asked for a file (paths from your folder, each with a few words on what it is); needs_you (under 70 characters) only if they must do something. Then stop: finish is all they see.`
     : `When you're done, call finish once: outcome is one plain sentence under 90 characters, files lists what they should open (paths from your folder, each with a few words on what it is), report (optional, under 1,200 characters) only for something they should know, place (optional) only if the result lives somewhere else (a folder, file or http(s) web address), and needs_you (under 70 characters) only if they must do something. Then stop: finish is all they see.`;
-  return `You are a background agent working for ${userName} in Roamies, a desktop app. You work alone: nobody reads your messages while you work, and you can't see the screen. The brief is all you know about the request, so do what it says without asking questions.
+  return `You are a background agent working for ${userName} in My Buddy, a desktop app. You work alone: nobody reads your messages while you work, and you can't see the screen. The brief is all you know about the request, so do what it says without asking questions.
 ${how}
 ${mode}
 Your folder is ${dir}. What you make for ${userName} goes in files/ (only finished things, with clear names); scratch work, downloads and installed libraries go in work/; anything they sent you is in inputs/. Save what you make with paths starting files/ (like files/poem.md), and save each thing once: no second copies. Relative paths and run_command start in your folder.${deliverTo ? ` When you finish, a copy of what you list is also put in ${deliverTo} for them; don't copy it there yourself.` : ''}
@@ -271,7 +271,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     const entry = `## Run ${a.runs} · ${stamp(a.started)} · ${a.state}\nAsked: ${one(a.brief, 600)}\n${a.result ? `Outcome: ${a.result.outcome}\n` : `Outcome: ${a.reason ?? a.state}\n`}${files ? `Files: ${files}\n` : ''}${a.result?.report ? `Report: ${a.result.report}\n` : ''}${a.result?.place ? `Place: ${a.result.place.url ?? a.result.place.path}\n` : ''}${a.result?.needs_you ? `Needs you: ${a.result.needs_you}\n` : ''}${a.delivered?.length ? `Copied to: ${a.delivered.join(', ')}\n` : ''}\n`;
     await fs.promises.appendFile(path.join(a.dir, 'history.md'), entry).catch(() => {});
     const index = path.join(dirOf, 'index.md');
-    if (!(await exists(index))) await fs.promises.writeFile(index, '# Roamies agents\n\nOne line per run: date · title · folder · asked · outcome.\n\n').catch(() => {});
+    if (!(await exists(index))) await fs.promises.writeFile(index, '# My Buddy agents\n\nOne line per run: date · title · folder · asked · outcome.\n\n').catch(() => {});
     await fs.promises.appendFile(index, `- ${stamp(a.started)} · ${one(a.title, 60)} · ${a.folder}/ · asked: ${one(a.brief, 120)} · ${a.state}: ${one(a.result?.outcome ?? a.reason ?? '', 120)}\n`).catch(() => {});
     await saveState(a);
   }
@@ -284,7 +284,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
       const a = await fs.promises.readFile(path.join(dirOf, name, '.agent.json'), 'utf8').then(JSON.parse, () => null);
       if (!a?.id || agents.has(a.id) || !AGENT_TYPES.includes(a.type)) continue;
       Object.assign(a, { dir: path.join(dirOf, name), folder: name, ask: null, workFrom: null });
-      if (a.state === 'working' || a.state === 'waiting') { a.state = 'stopped'; a.reason = 'Roamies closed'; a.ended = a.ended ?? now(); a.seen = true; a.told = true; await record(a); }
+      if (a.state === 'working' || a.state === 'waiting') { a.state = 'stopped'; a.reason = 'My Buddy closed'; a.ended = a.ended ?? now(); a.seen = true; a.told = true; await record(a); }
       if (now() - (a.ended ?? a.started ?? 0) < 30 * 24 * 3600_000) agents.set(a.id, a);
     }
   })().catch((e) => log('agents_load', { error: String(e.message) }));
@@ -577,7 +577,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     // The overlay (re)loaded: it gets every agent still working, and failures not yet dismissed.
     sync: () => { for (const a of agents.values()) if (a.state === 'working' || a.state === 'waiting' || (a.state === 'failed' && !a.seen)) tell('update', a); },
     setAllow: (on) => { for (const p of procs.values()) if (p.child.connected) p.child.send({ t: 'allow', on: !!on }); },
-    stopAll: () => { clearInterval(watch); for (const id of procs.keys()) stop(id, { state: 'stopped', reason: 'Roamies closed' }); },
+    stopAll: () => { clearInterval(watch); for (const id of procs.keys()) stop(id, { state: 'stopped', reason: 'My Buddy closed' }); },
   };
 }
 

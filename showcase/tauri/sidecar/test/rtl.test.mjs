@@ -10,6 +10,6 @@ vm.runInNewContext(fs.readFileSync(new URL('../../../roamies/core.js', import.me
   window, Math, Map, performance, matchMedia: () => ({ matches: false, addEventListener: noop }), addEventListener: noop, document: { addEventListener: noop },
 });
 const { rtl } = window.Roamie;
-for (const s of ['مرحبا بك', 'שלום', 'Roamies يعمل الآن', 'ﻻ', 'ܫܠܡܐ']) assert.equal(rtl(s), true, s);
+for (const s of ['مرحبا بك', 'שלום', 'My Buddy يعمل الآن', 'ﻻ', 'ܫܠܡܐ']) assert.equal(rtl(s), true, s);
 for (const s of ['Hello there', 'Привет', '你好', 'café 42', '', null, undefined]) assert.equal(rtl(s), false, String(s));
 console.log('rtl tests: passed');

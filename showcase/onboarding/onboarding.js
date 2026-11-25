@@ -1185,8 +1185,8 @@
       }));
     },
     render() {
-      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'jarvis')) ?? LOOKS[0])[1]}.`;
-      look.radios('looks', LOOKS, state?.look ?? 'jarvis', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
+      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'nova')) ?? LOOKS[0])[1]}.`;
+      look.radios('looks', LOOKS, state?.look ?? 'nova', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
       look.radios('sizes', SIZES, state?.size ?? 'default', (v) => { state.size = v; sidekick.setForm?.(v); send({ type: 'ob_size', size: v }); quip(SIZE_QUIPS[v]); look.render(); });
       look.radios('themes', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']], themeNow(), (v) => { setTheme(v); send({ type: 'ob_theme', theme: v }); look.render(); });
     },
@@ -1336,7 +1336,7 @@
     const sys = win ? { type: 'perms', mic: q.get('blocked') === '1' ? 'denied' : 'granted', input: true } : { type: 'perms', mic: pre, speech: old ? pre : 'granted', speechNeeded: old, screen: pre, accessibility: pre };
     const st = {
       // &filesAsked=1: Allow was tapped for the folders in an earlier run. &replies=voice&fish=1: voice already on.
-      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'jarvis', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
+      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'nova', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
       // &tts=gemini&gemini=1: Gemini as the voice, its key saved.
       replies: q.get('replies') === 'voice' ? 'voice' : 'text', fishKey: q.get('fish') === '1',
       bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/My Buddy 0.1.33.AppImage' --${k}`])) : null,

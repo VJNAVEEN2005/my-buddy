@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "My Buddy for Chrome",
+  "version": "0.1.0",
+  "description": "Lets the My Buddy desktop app read and work tabs in this browser, with your own sign-ins.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr613MnnOoIGNShA5x58uM2XfxwjcK3Oe7Z7XpzvG0wi5zUE8PbZCH7yQU5NwGCQoARW+FpVBPHekhpupx3E+T+xxmZYDOKxzxqqM6oGJYe9/dZKeZqTWLHIjjYscVovGUF/8YK8BKmIG6qBmOztFinGqp3+E53Qa0CjkjVdQFRz2xzwaDs4j5VjCTQGipcVl6VWclccrvG6BDF4ScGYCzw7vi2nht5xM/zL1NNz/psvkf+FKNUHbG2g1gKOtfMLY5GWCmOWesjWyPEZno+WBeNDecyj5nymgSR9GXHXu6vVhEBqyYxyNafnUPhSnst0se4h74aiVH5YtRDEPAWRLMwIDAQAB",
+  "permissions": ["tabs", "scripting", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" }
+}

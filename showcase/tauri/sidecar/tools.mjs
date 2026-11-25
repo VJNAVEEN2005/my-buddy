@@ -9,6 +9,7 @@ import { createWebFetchTool, createWebSearchTool, runSideWebSearch, runSideWebSe
 import { z } from 'zod';
 import { parseSipsSize, readProblem, rematch, sameBounds, shotFits, shotMap, shotProblem, shotUnits, snapRect, toScreen } from './pointing.mjs';
 import { ASK, BLOCK, checkDrawAction, checkFetch, checkOpen, checkRead, checkWrite, classifyCommand, isRiskyClick, isYes, riskyKind } from './safety.mjs';
+import { createFlashcardTools, quizMisses } from './flashcards.mjs';
 import { CARDS, DrawArgs, drawModelSchema, LIMITS, checkDraw, createLists, createParts, createPhotos, describeParts, faviconFor, pickTextMatch, quizNote, readSecs, resolveTargets } from './draw.mjs';
 import { plain } from './intro.mjs';
 import { linuxSession, seesPointer } from './platform.mjs';
@@ -605,7 +606,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     // Pictures and favicons are fetched all at once (each is a network round trip).
     await Promise.all(marks.map(async (m) => {
       if (m.kind === 'photo') {
-        try { Object.assign(m, await photos.get(m)); } catch (e) { m.missing = true; notes.push(`No photo for ${m.query ?? 'that link'} (${e.message}); drew its frame and caption only.`); }
+        try { Object.assign(m, await photos.get(m)); } catch (e) { m.missing = true; m.offline = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ENETUNREACH|ETIMEDOUT|network/i.test(`${e.message} ${e.cause?.code ?? ''}`); notes.push(m.offline ? `No internet, so no photo for ${m.query ?? 'that link'}; drew its frame and caption only. Tell the user the picture needs a connection.` : `No photo for ${m.query ?? 'that link'} (${e.message}); drew its frame and caption only.`); }
       } else if (m.kind === 'sources' || m.sources?.length) {
         m.sources = await Promise.all(m.sources.map(async (x) => ({ ...x, icon: checkDrawAction({ kind: 'favicon', url: x.url }).level === BLOCK ? null : await faviconFor(x.url).catch(() => null) })));
       }
@@ -727,6 +728,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     button: (part) => buttons.get(String(part)) ?? null,
     // A quiz was answered on screen (the option clicked for each question): how it went, in words for the model.
     quizDone: (part, picks) => quizNote(quizzes.get(String(part)), picks),
+    quizMissed: (part, picks) => quizMisses(quizzes.get(String(part)), picks),
     // A drawn list changed on its card (tick, add, edit): the items after it (null if nothing changed). The part's
     // description follows, so "On screen now" lists what's really there.
     list: (part) => lists.get(String(part)),
@@ -1178,6 +1180,7 @@ A drawing stays until it's cleared, the window changes or the next one replaces 
     ...(browser ? browserTools({ browser, confirm, userName }) : []),
     ...createAcademicTools({ openUrl, callModel, userName }),
     ...createExamTools({ changed: onExams }),
+    ...createFlashcardTools({ changed: onExams }),
   ];
 
   // What's in front, for the live state. Quick and never fails: '' if the helper is missing, slow or denied.

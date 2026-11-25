@@ -16,18 +16,22 @@ for (const [file, url] of [['desktop.html', 'onboarding/fonts/readex-pro-arabic.
   const letters = face('Roamies Arabic'), rtl = face('Roamies Arabic RTL');
   assert.ok(letters && rtl, `${file} declares both Arabic faces`);
   assert.ok(letters.includes(url) && rtl.includes(url), `${file}: both load the bundled file`);
-  assert.ok(!/U\+0020/.test(letters), `${file}: the letters face leaves the space to Martian Mono`);
+  assert.ok(!/U\+0020/.test(letters), `${file}: the letters face leaves the space to the system font`);
   assert.ok(/U\+0020/.test(rtl) && /U\+0600-06FF/.test(rtl), `${file}: the right-to-left face also takes the space`);
 }
-assert.match(read('onboarding/onboarding.css'), /--mono:\s*"Martian Mono",\s*"Roamies Arabic"/, 'the panel stack has the Arabic letters after Martian Mono');
+const SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system';
+assert.ok(read('onboarding/onboarding.css').includes(`--font: ${SANS}, "Roamies Arabic"`), 'the panel stack has the Arabic letters after the system font');
 
 // Where the overlay draws or lays out text, Arabic gets the font: canvas stacks and the card / capsule / ask bar rules.
 const js = (f) => read(`roamies/${f}`);
-for (const f of ['glass.js', 'ink.js', 'agent.js', 'agent-panel.js', 'agent-home.js', 'ask-bar.js', 'notch.js']) {
-  assert.match(js(f), /"Martian Mono", "Roamies Arabic"/, `${f}: Arabic letters after Martian Mono`);
+for (const f of ['glass.js', 'ink.js', 'agent-panel.js', 'agent-home.js', 'ask-bar.js', 'notch.js']) {
+  assert.ok(js(f).includes(`${SANS}, "Roamies Arabic"`), `${f}: Arabic letters after the system font`);
 }
-assert.match(js('core.js'), /R\.rtlFont = \(s, font\) => \(R\.rtl\(s\) \? String\(font\)\.replace\('"Martian Mono"', '"Roamies Arabic RTL", "Martian Mono"'\)/, 'right-to-left canvas text puts the Arabic face first');
-assert.match(js('agent.js'), /const rf = R\.rtlFont\(line\.s, fontFor\(0\)\)/, 'the bubble draws Arabic lines with it');
+// The bubble lays letters on a grid, one per column: its font must be monospace, or wide letters are cut off.
+const bubbleFont = /const BUBBLE_FONT = '([^']*)'/.exec(js('agent.js'))?.[1] ?? '';
+assert.match(bubbleFont, /^"Cascadia Mono", Consolas, .*"Roamies Arabic", monospace$/, 'the bubble font is monospace, with the Arabic letters');
+assert.ok(js('core.js').includes(`R.rtlFont = (s, font) => (R.rtl(s) ? String(font).replace('${SANS}', '"Roamies Arabic RTL", ${SANS}')`), 'right-to-left canvas text puts the Arabic face first');
+assert.ok(js('agent.js').includes('const rf = R.rtlFont(line.s, `${base} ${fpx}px ${G.SANS}`)'), 'the bubble draws Arabic lines whole, in the system font');
 assert.match(js('agent-panel.js'), /\.rp-body :dir\(rtl\) \{ font-family: "Roamies Arabic RTL"/, 'the card too, per paragraph');
 assert.match(js('notch.js'), /\.nc-line:dir\(rtl\) \{ font-family: "Roamies Arabic RTL"/, 'and the capsule, per line');
 assert.match(js('ask-bar.js'), /ta\.dir = 'auto'/, 'typing Arabic runs right to left');

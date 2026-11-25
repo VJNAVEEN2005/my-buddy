@@ -6,7 +6,7 @@
 // Modifier state is read with CGEventSource, which needs no Input Monitoring permission.
 // While ⌃⌥ is held, moving the cursor draws on the screen (ink.swift); the marked area goes out with what was said.
 // While listening, a small voice-bar pill rides beside the cursor (wave.swift) instead of a transcript bubble.
-// With the wake word on, it also listens quietly for "Hey Roamies" and starts a hands-free take on hearing it.
+// With the wake word on, it also listens quietly for "Hey Buddy" and starts a hands-free take on hearing it.
 import AVFoundation
 import AppKit
 import CoreAudio
@@ -63,7 +63,7 @@ func log(_ s: String) {
     FileHandle.standardError.write(Data("[voice] \(s)\n".utf8))
 }
 
-// Wake lines carry the time, so a missed "Hey Roamies" can be matched to when it was said.
+// Wake lines carry the time, so a missed "Hey Buddy" can be matched to when it was said.
 private let clock: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f }()
 func wakeLog(_ s: String) { log("wake \(clock.string(from: Date())): \(s)") }
 
@@ -199,7 +199,7 @@ final class AnalyzerRecognizer: Recognizer {
                 let tr = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
                 let a = SpeechAnalyzer(modules: [tr])
                 analyzer = a
-                // Lean toward the app's names, as contextualStrings does for the older recogniser ("Hey Roamies").
+                // Lean toward the app's names, as contextualStrings does for the older recogniser ("Hey Buddy").
                 let context = AnalysisContext()
                 context.contextualStrings[.general] = WakeWord.hints
                 try? await a.setContext(context)
@@ -473,19 +473,19 @@ final class AutoGain {
     }
 }
 
-// The wake phrase, "Hey Roamies": a greeting, then the name, at the start of something said (the text's start or
-// after a sentence end). Near-misses the recogniser really writes count too ("Romies", "Roamie's", "Roomies").
+// The wake phrase, "Hey Buddy": a greeting, then the name, at the start of something said (the text's start or
+// after a sentence end). Near-misses the recogniser really writes count too ("Buddie", "Budy").
 // The name can be the user's own ("Hey Jarvis"); the greeting stays, so the name alone in a sentence never wakes it.
 enum WakeWord {
     static let greetings: Set<String> = ["hey", "hi", "hay", "heya", "hiya"]
-    static let defaultNames = ["roamies", "roamie"]
+    static let defaultNames = ["buddy", "buddie"]
     // Set and read on the main thread.
     private(set) static var names = defaultNames
-    /// The chosen name as a word for the recogniser's hints ("Jarvis"); nil for Roamies.
+    /// The chosen name as a word for the recogniser's hints ("Jarvis"); nil for Buddy.
     private(set) static var custom: String?
-    static var hints: [String] { ["Roamies", "Roamie", "JARVIS"] + (custom.map { [$0] } ?? []) }
+    static var hints: [String] { ["Buddy"] + (custom.map { [$0] } ?? []) }
 
-    /// Sets the name after the greeting; nil, "" or Roamies goes back to Roamies. Letters only, 4 to 20 of them;
+    /// Sets the name after the greeting; nil, "" or Buddy goes back to Buddy. Letters only, 4 to 20 of them;
     /// anything else is refused (returns false) and the name stays as it was.
     @discardableResult static func setName(_ raw: String?) -> Bool {
         let w = (raw ?? "").lowercased().filter { $0.isLetter }
@@ -496,16 +496,16 @@ enum WakeWord {
         return true
     }
 
-    /// Whether a heard word (within the allowed edits) is shaped like the name. Roamies keeps its own tuned rule.
+    /// Whether a heard word (within the allowed edits) is shaped like the name. Buddy keeps its own tuned rule.
     static func plausible(_ heard: String) -> Bool {
-        guard custom != nil, let n = names.first else { return heard.hasPrefix("r") && heard.contains("m") && heard.count >= 5 }
+        guard custom != nil, let n = names.first else { return heard.hasPrefix("b") && heard.contains("d") && heard.count >= 4 }
         return heard.first == n.first && heard.count >= n.count - 1
     }
 
-    /// Edits allowed for the next word, and one fewer for two words joined ("Roam ies"). A short name of the user's own
+    /// Edits allowed for the next word, and one fewer for two words joined ("Bud dy"). A short name of the user's own
     /// must be heard exactly ("Nova" mustn't take "Nora"); 6 or 7 letters allow one edit, longer ones two.
     static var allowedEdits: Int {
-        guard custom != nil else { return 2 }
+        guard custom != nil else { return 1 }
         let n = names.first?.count ?? 0
         return n >= 8 ? 2 : n >= 6 ? 1 : 0
     }
@@ -589,7 +589,7 @@ enum WakeWord {
 }
 
 final class Voice {
-    // wake: listening quietly for "Hey Roamies" (no pill, nothing muted); hearing it turns into a hands-free take.
+    // wake: listening quietly for "Hey Buddy" (no pill, nothing muted); hearing it turns into a hands-free take.
     enum Phase { case idle, wake, armed, holding, handsFree, finishing }
 
     private var phase = Phase.idle
@@ -1287,44 +1287,36 @@ if args.contains("--test-wake") {
         print("\(got == want ? "ok" : "FAIL") \"\(text)\" -> \(got.map { "\"\($0)\"" } ?? "no wake")")
         if got != want { bad += 1 }
     }
-    check("Hey Roamies", "")
-    check("Hey Roamies, open Safari.", "open Safari.")
-    check("hey roamies open safari", "open safari")
-    check("Hey, Roamies.", "")
-    check("Hi Roamies what time is it?", "what time is it?")
-    check("Hey Romies", "")
-    check("Hey Roamie's, open Notes", "open Notes")
-    check("Hey Roamie", "")
-    check("Hey Roomies, play some music", "play some music")
-    check("Hey Romi's", "")
-    check("Hey, Romees.", "")
-    check("Hey Romy's", nil) // three edits away
-    check("Hey roam ies, hello", "hello")
-    check("That's it. Hey Roamies, open Mail", "open Mail")
-    check("HEY ROAMIES! What's on today?", "What's on today?")
-    check("Hey Roamies\u{2019} open notes", "open notes")
-    check("Hey Ronnie", nil)
-    check("Hey Robbie, come here", nil)
-    check("Hey Rome", nil)
-    check("Hey rooms", nil)
-    check("Hey ramen", nil)
-    check("Hey Remy", nil)
-    check("Hey rhymes", nil)
-    check("Hey room is ready", nil)
-    check("Roamies is great", nil)
-    check("I told him hey Roamies", nil)
-    check("Um hey Roamies, open Mail", "open Mail")
-    check("Okay, hi Roamies", "")
-    check("The hey Romies what time is it", "what time is it")
-    check("So I said hey Roamies", nil)
+    check("Hey Buddy", "")
+    check("Hey Buddy, open Chrome.", "open Chrome.")
+    check("hey buddy open chrome", "open chrome")
+    check("Hey, Buddy.", "")
+    check("Hi Buddy what time is it?", "what time is it?")
+    check("Hey Budy", "")
+    check("Hey Buddie, open Notes", "open Notes")
+    check("Hey Buddy's, open Notes", "open Notes")
+    check("Hey bud dy, hello", "hello")
+    check("That's it. Hey Buddy, open Mail", "open Mail")
+    check("HEY BUDDY! What's on today?", "What's on today?")
+    check("Hey Bobby, come here", nil)
+    check("Hey body", nil)
+    check("Hey Betty", nil)
+    check("Hey daddy", nil)
+    check("Hey bud", nil)
+    check("Hey buddies", "")
+    check("Buddy is great", nil)
+    check("I told him hey Buddy", nil)
+    check("Um hey Buddy, open Mail", "open Mail")
+    check("Okay, hi Buddy", "")
+    check("So I said hey Buddy", nil)
     check("Hey there", nil)
     check("Hey", nil)
-    check("Hey. Roamies", nil)
+    check("Hey. Buddy", nil)
     check("", nil)
     // A later reading of the take that no longer matches the phrase: its words still come off.
     func dropped(_ n: Int, _ text: String, _ want: String) { let got = WakeWord.dropping(n, from: text); print("\(got == want ? "ok" : "FAIL") drop \(n) \"\(text)\" -> \"\(got)\""); if got != want { bad += 1 } }
-    dropped(2, "Hey Romy's, what time is it?", "what time is it?")
-    dropped(2, "Hey Romy's", "")
+    dropped(2, "Hey Budd's, what time is it?", "what time is it?")
+    dropped(2, "Hey Budd's", "")
     dropped(3, "Um hey Romy's open Mail", "open Mail")
     dropped(0, "open Mail", "open Mail")
     // A name of the user's own.
@@ -1339,14 +1331,14 @@ if args.contains("--test-wake") {
     check("Hey Jar vis, hello", "hello")
     check("Hey Travis", nil)
     check("Hey Service", nil)
-    check("Hey Roamies", nil)
+    check("Hey Buddy", nil)
     check("Jarvis is great", nil)
     check("I told him hey Jarvis", nil)
     named(true, "Nova")
     check("Hey Nova, play music", "play music")
     check("Hey Nora", nil) // a short name must be heard exactly
     named(true, "")
-    check("Hey Roamies, open Mail", "open Mail")
+    check("Hey Buddy, open Mail", "open Mail")
     check("Hey Jarvis", nil)
     exit(bad == 0 ? 0 : 1)
 }

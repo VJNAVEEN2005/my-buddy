@@ -1,5 +1,7 @@
 (() => {
   'use strict';
+  // Awake while it's drawing, speaking or showing a card: reading a card leaves the mouse still, which isn't idle.
+  const busyNow = () => { const R = window.Roamie; return !!(R?.ink?.busy || R?.voiceOut?.speaking?.()); };
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -255,7 +257,7 @@
   // Realistic eyes: shaded sclera, striated iris, lids made of body material, cheek squint, fixed catchlights.
   R.drawEyesPro = (ctx, f, x, y, size, o = {}) => {
     const gap = o.gap ?? size * 1.2;
-    const lid = o.lid ?? '#2fbf93';
+    const lid = o.lid ?? '#28b4c6';
     const lash = o.lash ?? 'rgba(0,0,0,0.6)';
     const [iIn, iMid, iOut] = o.iris ?? ['#fff3c4', '#f2a531', '#5a2400'];
     const tilt = o.tilt ?? 0;
@@ -277,7 +279,7 @@
 
       ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
       const sg = ctx.createRadialGradient(-rx * 0.25, -ry * 0.3, 0, 0, 0, Math.max(rx, ry) * 1.05);
-      sg.addColorStop(0, '#ffffff'); sg.addColorStop(0.65, '#eaf0f3'); sg.addColorStop(1, o.scleraEdge ?? '#9fb0bb');
+      sg.addColorStop(0, '#ffffff'); sg.addColorStop(0.65, '#eaf2f3'); sg.addColorStop(1, o.scleraEdge ?? '#9fb0bb');
       ctx.fillStyle = sg; ctx.fill();
       ctx.save();
       ctx.clip();
@@ -357,7 +359,7 @@
 
   // Refined mouth: nothing at rest, a shaded open smile, a small "o", or a wavy dizzy line.
   R.drawMouthPro = (ctx, f, x, y, w, o = {}) => {
-    const ink = o.ink ?? '#06261f', inner = o.inner ?? '#2a0a12', tongue = o.tongue;
+    const ink = o.ink ?? '#061026', inner = o.inner ?? '#2a0a12', tongue = o.tongue;
     ctx.save();
     ctx.translate(x, y);
     ctx.lineCap = 'round';
@@ -403,7 +405,7 @@
 
   // Glowing visor-style eyes: light shapes that morph per expression.
   R.drawVisorEyes = (ctx, f, x, y, size, o = {}) => {
-    const gap = o.gap ?? size * 1.3, col = o.color ?? '#7ff3ff', core = o.core ?? '#f2feff';
+    const gap = o.gap ?? size * 1.3, col = o.color ?? '#7ff0ff', core = o.core ?? '#f2fdff';
     ctx.save();
     ctx.translate(x, y);
     if (o.angle) ctx.rotate(o.angle);
@@ -484,7 +486,7 @@
   R.rtl = (s) => RTL.test(String(s ?? ''));
   // A canvas font for right-to-left text: the Arabic font first, so its own narrow space is used between Arabic words
   // (Martian Mono's space is a whole monospace cell). Other text keeps the font it was given.
-  R.rtlFont = (s, font) => (R.rtl(s) ? String(font).replace('"Martian Mono"', '"Roamies Arabic RTL", "Martian Mono"') : font);
+  R.rtlFont = (s, font) => (R.rtl(s) ? String(font).replace('"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system', '"Roamies Arabic RTL", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system') : font);
   R.hitRects = (test, box, cell = 12, pad = 8) => {
     const out = [];
     const x0 = Math.floor(box[0]), y0 = Math.floor(box[1]), cols = Math.ceil(box[2] / cell), rows = Math.ceil(box[3] / cell);
@@ -526,11 +528,27 @@
       c.mover.onBonk = (s) => { c.face?.set('dizzy', 1.8); c.bonk?.(s); };
       return { def, env, c };
     });
-    // The canvas covers only what's drawn this frame (plus slack) and moves with it, so the page uploads
-    // and composites a small patch instead of the whole screen at 120 Hz. Drawing stays in screen coordinates.
-    Object.assign(canvas.style, { inset: 'auto', left: '0px', top: '0px', transformOrigin: '0 0', willChange: 'transform' });
+    // On Windows, dynamic canvas resizing and CSS transforms trigger DirectX swapchain reallocations
+    // over transparent WebView2 windows, which causes momentary black rectangular flashes / borders while moving.
+    // Keeping the canvas fixed to the window size eliminates all black rectangles and flickering completely.
+    const isWindows = typeof navigator !== 'undefined' && (/Win/i.test(navigator.platform || '') || /Windows/i.test(navigator.userAgent || ''));
+    if (isWindows) {
+      Object.assign(canvas.style, { position: 'fixed', inset: '0', width: '100vw', height: '100vh', transform: 'none', willChange: 'auto' });
+    } else {
+      Object.assign(canvas.style, { inset: 'auto', left: '0px', top: '0px', transformOrigin: '0 0', willChange: 'transform' });
+    }
     let cw = 0, ch = 0, vx = 0, vy = 0, roomy = 0;
     const place = (U, dt) => {
+      if (isWindows) {
+        cw = W; ch = H; vx = 0; vy = 0;
+        if (canvas.style.visibility) canvas.style.visibility = '';
+        if (!U) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          return false;
+        }
+        return true;
+      }
       const x0 = U && clamp(Math.floor(U.x0), 0, W), y0 = U && clamp(Math.floor(U.y0), 0, H);
       const x1 = U && clamp(Math.ceil(U.x1), 0, W), y1 = U && clamp(Math.ceil(U.y1), 0, H);
       if (!U || x1 <= x0 || y1 <= y0) {
@@ -557,7 +575,15 @@
     };
     const resize = () => {
       W = innerWidth; H = innerHeight; dpr = Math.min(2, devicePixelRatio || 1);
-      cw = ch = 0;
+      if (isWindows) {
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        canvas.style.width = `${W}px`;
+        canvas.style.height = `${H}px`;
+        cw = W; ch = H; vx = 0; vy = 0;
+      } else {
+        cw = ch = 0;
+      }
       for (const o of list) { o.env.w = W; o.env.h = H; o.env.dpr = dpr; o.c.resize?.(o.env); }
     };
     addEventListener('resize', resize);
@@ -664,7 +690,7 @@
       blank = gone;
       for (const o of list) {
         const { env, c } = o, m = c.mover;
-        env.t += dt; env.reduced = reducedMQ.matches; env.sleepy = idle > 12 ? 1 : 0;
+        env.t += dt; env.reduced = reducedMQ.matches; env.sleepy = idle > 12 && !busyNow() ? 1 : 0;
         env.mouse.active = pointer.active && idle < 6;
         env.mouse.x = pointer.x; env.mouse.y = pointer.y; env.mouse.vx = pointer.vx; env.mouse.vy = pointer.vy;
         env.mouse.inside = env.mouse.active && pointer.x >= 0 && pointer.y >= 0 && pointer.x <= W && pointer.y <= H;
@@ -700,6 +726,9 @@
           o.c.draw(ctx, o.env);
           ctx.restore();
         }
+      } else if (!shown) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
       // Nothing on screen (drawn natively, or off it): just the bookkeeping, 30 times a second, off the display clock.
       if (!shown && !list.some((o) => o.c.mover.dragging)) { nap = setTimeout(() => { nap = 0; requestAnimationFrame(frame); }, 33); return; }

@@ -83,7 +83,7 @@
   const field = document.createElement('input');
   Object.assign(field.style, { position: 'fixed', left: '0', top: '0', width: '1px', height: '1px', opacity: '0', pointerEvents: 'none' });
   // Its name is its look's (the sidecar's LOOKS).
-  const NAMES = { jarvis: 'Buddy', classic: 'Pixel', cosmo: 'Cosmo', glayos: 'GlayOS', ultren: 'Ultren', anime: 'Anime Girl', sarah: 'Sarah', adrian: 'Adrian', rita: 'Rita X' };
+  const NAMES = { jarvis: 'Buddy', classic: 'Pixel', cosmo: 'Cosmo', peri: 'Peri', nova: 'Nova', sprout: 'Sprout' };
   field.setAttribute('aria-label', 'Message for Roamie');
   field.autocomplete = 'off'; field.spellcheck = false;
   document.addEventListener('DOMContentLoaded', () => document.body.appendChild(field));
@@ -523,6 +523,7 @@
     // Light or Dark (the panel's Appearance > Theme): the cards, bubbles and the ask bar; the characters keep their colours.
     // Light, Dark, or System (follows the computer, and switches when it does).
     if (m.kind === 'theme') { themePick = m.theme; applyTheme(); return; }
+    if (m.kind === 'cardscale') { if (Roamie.ink) Roamie.ink.scale = Math.min(1.5, Math.max(1, Number(m.scale) || 1)); return; }
     if (m.kind === 'size') { for (const t of Roamie.tiles ?? []) t.creature.setForm?.(m.size); return; }
     if (m.kind === 'pixel_color') { for (const t of Roamie.tiles ?? []) t.creature.setColor?.(m.color); return; }
     if (m.kind === 'pixel_texture') { for (const t of Roamie.tiles ?? []) t.creature.setMatrixStyle?.(m.texture); return; }
@@ -556,7 +557,9 @@
     if (m.kind === 'intro') { if (capR()) N().say(m.text); else getAgent().intro(m.x, m.text); return; }
     if (m.kind === 'esc') { onEsc(); return; }
     if (m.kind === 'panic') { onPanic(); return; }
+    if (m.kind === 'badge') { setBadge(m.badge); return; }
     if (m.kind === 'summon') {
+      badgeHidden = false; if (badgeEl) badgeEl.hidden = false;
       // ⌃⌥S toggles; the menu's Show Sidekick only ever shows. With the capsule on, it's the capsule that comes out.
       if (notchOn()) {
         if (!N().active) N().hello();
@@ -608,7 +611,22 @@
   }
   // Panic key: everything Esc does, all at once. Drops a take, stops the answer and the voice, clears drawings,
   // closes the ask field, the panel and the capsule, and sends the buddy away.
+  // The exam countdown badge (Study page, Exams: "Countdown on the desktop"): a small pill in the bottom-left corner,
+  // { text, sub } from the sidecar, null to take it away. The panic key hides it until the Roamie is shown again.
+  let badgeEl = null, badgeHidden = false;
+  function setBadge(b) {
+    if (!b) { badgeEl?.remove(); badgeEl = null; return; }
+    if (!badgeEl) {
+      badgeEl = document.createElement('div');
+      badgeEl.className = 'exam-badge';
+      badgeEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(badgeEl);
+    }
+    badgeEl.replaceChildren(Object.assign(document.createElement('b'), { textContent: b.text }), ...(b.sub ? [Object.assign(document.createElement('span'), { textContent: b.sub })] : []));
+    badgeEl.hidden = badgeHidden;
+  }
   function onPanic() {
+    badgeHidden = true; if (badgeEl) badgeEl.hidden = true;
     dropAutoListen();
     if (ask) finishAsk(null);
     if (hearing) { hearing = false; send({ type: 'listen_cancel' }); }

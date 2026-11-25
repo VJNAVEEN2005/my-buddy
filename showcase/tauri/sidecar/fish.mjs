@@ -23,7 +23,7 @@ export const RATE = 44100;
 // The voice's settings: balanced latency measured as fast as "low" (~0.4 s) with better quality. Loudness isn't
 // normalized: that flattened a whisper and a shout to the same level (1-8 dB apart; 10-28 dB without it, no clipping).
 export const startRequest = (voice, rate = RATE) => ({
-  text: '', reference_id: voice, format: 'pcm', sample_rate: rate, latency: 'balanced',
+  text: '', reference_id: voice === '7b29e0419c8f420485d9a9412e69f8c0' ? DEFAULT_VOICE : voice, format: 'pcm', sample_rate: rate, latency: 'balanced',
   temperature: 0.7, top_p: 0.7, chunk_length: 100, normalize: true, condition_on_previous_chunks: true,
   prosody: { speed: 1, volume: 0, normalize_loudness: false },
 });
