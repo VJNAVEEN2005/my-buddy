@@ -1117,6 +1117,11 @@ fn open_onboarding(app: &AppHandle, mode: Option<&str>) {
 /// background. So the guide window is put on top directly, then the app asks to become active.
 fn activate_app(app: &AppHandle) {
     activate_window(app, ONBOARDING_LABEL);
+    // Windows: the guide only jumps to the front; after that it's a normal window that other apps can cover.
+    #[cfg(windows)]
+    if let Some(w) = app.get_webview_window(ONBOARDING_LABEL) {
+        let _ = w.set_always_on_top(false);
+    }
 }
 
 fn activate_window(app: &AppHandle, label: &str) {

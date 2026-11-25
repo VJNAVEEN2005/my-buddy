@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.1.50",
+      "date": "2026-11-25",
+      "items": [
+        {"kind": "fixed", "title": "Setup lets other apps in front", "text": "The welcome window no longer stays on top. Other apps can go in front of it."}
+      ]
+    },
+    {
       "version": "0.1.49",
       "date": "2026-11-25",
       "items": [
