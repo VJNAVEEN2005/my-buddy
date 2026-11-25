@@ -13,7 +13,16 @@
   // An action from the menu's list. away: it happens on the desktop, so the panel steps aside first.
   const act = (id, away = false) => { if (away) hide(); send({ type: 'menu', id }); };
 
-  let state = null, tab = 'home', deferred = false;
+  let state = null, tab = 'home', deferred = false, picking = false;
+  // The theme (Light, Dark, or System: whatever Windows or macOS is set to): the last one is kept in the panel's own
+  // storage too, so opening doesn't flash white first.
+  const sysDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
+  const resolveTheme = (t) => (t === 'system' ? (sysDark() ? 'dark' : 'light') : t === 'dark' ? 'dark' : 'light');
+  const themePref = (t) => (t === 'dark' || t === 'system' ? t : 'light');
+  let themeChoice = 'light';
+  const setTheme = (t) => { themeChoice = themePref(t); document.documentElement.dataset.theme = resolveTheme(themeChoice); try { localStorage.setItem('buddy-theme', themeChoice); } catch {} };
+  try { setTheme(localStorage.getItem('buddy-theme')); } catch { setTheme('light'); }
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themeChoice === 'system') setTheme('system'); }); } catch {}
   // What's open in the panel itself: a key field (provider id, 'fish' or 'gemini'), the row action waiting for its
   // Confirm, each long list's page (pg) and how many rows fit on one (per, measured), Memory's tab and its search.
   const ui = { key: null, kind: {}, arm: null, add: { label: '', url: '', key: '', images: false }, addSent: null, pg: {}, per: {}, base: {}, rec: null, mtab: 'facts', tabs: {}, q: '', bindShown: new Set(), mcpQ: '', mcpAdd: false, customMcp: { name: '', cmd: '', args: '', url: '', envKey: '', envVal: '', type: 'stdio' } };
@@ -241,7 +250,7 @@
       : u.result ? ['Check again', "Couldn't check for updates. Check again", 'ghost', false]
       : ['Check for updates', 'Check for updates', 'ghost', false];
     b.hidden = false; b.textContent = label; b.disabled = off;
-    b.className = `px btn mini ${kind}`;
+    b.className = `head-btn ${kind}`;
     b.setAttribute('aria-label', aria);
     b.title = u.result && !u.result.ok && !v && !u.checking ? u.result.error ?? "Couldn't check for updates." : '';
     clearTimeout(freshTimer);
@@ -257,8 +266,18 @@
     quitB.setAttribute('aria-pressed', 'true'); quitB.setAttribute('aria-label', 'Confirm: quit My Buddy');
     quitTimer = setTimeout(unarmQuit, 4000);
   });
+  // Maximise / back, by its button or a double-click on the header; a press on the header's empty part drags the window.
+  const maxB = $('head-max');
+  const setMax = (on) => { if (!maxB) return; maxB.setAttribute('aria-label', on ? 'Restore size' : 'Maximise'); maxB.dataset.tip = on ? 'Restore size' : 'Maximise';
+    maxB.querySelector('svg').innerHTML = on ? '<rect x="3.5" y="1.5" width="7" height="7" rx="1.5"/><path d="M1.5 4v5a1.5 1.5 0 0 0 1.5 1.5h5"/>' : '<rect x="1.5" y="1.5" width="9" height="9" rx="1.5"/>'; };
+  const toggleMax = () => invoke('panel_maximize').then((on) => setMax(!!on)).catch(() => {});
+  maxB?.addEventListener('click', toggleMax);
+  const headBar = document.querySelector('.head');
+  const onChrome = (e) => !e.target.closest('button, a, input, select, [role="button"], canvas');
+  headBar?.addEventListener('mousedown', (e) => { if (e.button === 0 && e.detail === 1 && onChrome(e)) invoke('drag_window').catch(() => {}); });
+  headBar?.addEventListener('dblclick', (e) => { if (onChrome(e)) toggleMax(); });
   const closeB = $('head-close');
-  closeB.innerHTML = '<span class="esc-kbd">ESC</span><span class="close-x">✕</span>';
+  closeB.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>';
   closeB.addEventListener('click', hide);
   const modelPill = $('head-model-pill');
   if (modelPill) {
@@ -349,6 +368,13 @@
   // The header's Roamie: your look, reacting to what's going on. A short line beside it when something changes.
   // The same size and detail as the look tiles (fewer dots than that and the faces turn to noise).
   const avatar = liveRoamie($('avatar'), 100, 74, { y: 0.55 });
+  // Pointer on the face at the top left: it pulls a face (a different one each time, never more than one every 2.5s).
+  const FACES = ['wave', 'hype', 'motivate', 'upset', 'remind'];
+  let faceAt = 0, faceN = 0;
+  $('avatar')?.closest('.brand-wrap')?.addEventListener('pointerenter', () => {
+    if (!avatar || Date.now() - faceAt < 2500) return;
+    faceAt = Date.now(); avatar.act(FACES[faceN++ % FACES.length]);
+  });
   const QUIPS = { jarvis: 'Hey! Buddy here.', classic: 'Pixel me!', cosmo: 'Bloop bloop! Cosmo here, ready to explore!', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: "Alright, let's do this.", rita: 'Shall we get to work?' };
   let quipTimer = 0, seen = { look: null, update: null, opened: 0 };
   function quip(text, secs = 2.6) {
@@ -714,6 +740,8 @@
     { k: `addkey:${p.id}`, aria: `${p.keySaved ? 'Change the' : 'Add a'} ${p.label} API key` });
 
   // Settings, one page per concern.
+  const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
+  const THEME_TIPS = { light: 'Dark text on white.', dark: 'Light text on black.', system: 'Follows your computer: light by day, dark when it switches to dark.' };
   const SIZE_TIPS = { default: 'My full size.', small: 'Half my size, so I take less of your screen.', cursor: 'I become a little arrow pointer, like your cursor.' };
   // The runnable models, one optgroup per signed-in provider, values 'provider:modelId'; `current` is the selected one ('' for none).
   // text: also the models that can't see images, in their own group per provider (subagents only).
@@ -902,8 +930,10 @@
         toggle('Its models can see images', 'Most servers don\'t say, so tell me.', a.images, () => { a.images = !a.images; render(`img:${ADD}`); }, `img:${ADD}`)) : null);
   }
   function appearancePage() {
-    const tabs = [['look', 'Look'], ['size', 'Size']], t = pageTab('appearance', tabs);
+    const tabs = [['look', 'Look'], ['size', 'Size'], ['theme', 'Theme']], t = pageTab('appearance', tabs);
     const head = el('div', { className: 'mhead' }, tabRow('Appearance', 'look-panel', tabs, t, (id) => { ui.tabs.appearance = id; }));
+    if (t === 'theme') return [head, tabPanel('look-panel', t, group(null, 'This changes this window and the cards and bubbles on your screen, not me.', null,
+      picks('Theme', THEMES, themePref(state.theme), (x) => { setTheme(x); act(`theme:${x}`); }, 'theme', THEME_TIPS)))];
     return [head, tabPanel('look-panel', t, t === 'look'
       ? group(null, 'Each look has its own name and voice.', null, lookTiles())
       : group(null, 'How big I am on your screen.', null, picks('Size', state.sizes, state.size, (x) => act(`size:${x}`), 'size', SIZE_TIPS)))];
@@ -1315,31 +1345,41 @@
     ];
   }
   // Who made Roamies: Ken, live (he's drawn like the looks but isn't one), and where to find him.
-  const KEN = [
-    ['Skool', 'Learn with Ken, or support him', 'https://www.skool.com/kenkai', "Open Ken Kai's Skool community"],
-    ['YouTube', '@kenkaidoesai', 'https://www.youtube.com/@kenkaidoesai', "Open Ken Kai's YouTube channel"],
-    ['TikTok', '@ggkenkai', 'https://www.tiktok.com/@ggkenkai', "Open Ken Kai's TikTok"],
-    ['Source code', 'Open source under AGPL-3.0', 'https://github.com/KenKaiii/Roamies', 'Open the Roamies source code on GitHub'],
+  // Who made My Buddy, and its licence. Ken Kai's Roamies, which it is built on, gets a small credit under them.
+  const ME = [
+    ['GitHub', '@VJNAVEEN2005', 'https://github.com/VJNAVEEN2005', "Open Naveen's GitHub"],
+    ['Portfolio', 'vjnaveen.netlify.app', 'https://vjnaveen.netlify.app/', "Open Naveen's portfolio"],
+    ['Licence', 'AGPL-3.0: free and open source', 'https://www.gnu.org/licenses/agpl-3.0.html', 'Read the AGPL-3.0 licence'],
   ];
-  let ken = null;
-  function maker() {
-    if (!ken) {
+  const ROAMIES = 'https://github.com/KenKaiii/Roamies', KEN_YT = 'https://www.youtube.com/@kenkaidoesai';
+  // My Buddy's own card: the character they picked, the app's name, who made it, and the version.
+  let mine = null;
+  function myCard() {
+    if (!mine) {
       const cv = el('canvas', { 'aria-hidden': 'true' });
-      const r = liveRoamie(cv, 100, 74, { look: 'ken', y: 0.55 });
-      const card = el('div', { className: 'maker' }, cv, el('span', {}, 'Ken Kai', el('small', { textContent: 'Creator of Roamies' })));
+      const r = liveRoamie(cv, 100, 74, { look: state.look ?? 'jarvis', y: 0.55 });
+      const ver = el('small', {});
+      const card = el('div', { className: 'maker mine' }, cv, el('span', {}, 'My Buddy', ver));
       let waved = 0;
       card.addEventListener('pointerenter', () => { if (r && Date.now() - waved > 3500) { waved = Date.now(); r.act('wave'); } });
       r?.appear('crt');
-      ken = card;
+      mine = { card, r, ver };
     }
-    return ken;
+    mine.r?.setLook(state.look ?? 'jarvis');
+    mine.ver.textContent = `Made by Naveen VJ · v${state.version}`;
+    return mine.card;
   }
+  const openLink = (label, url, k, aria) => link(label, () => send({ type: 'open_link', url }), { k, aria });
   function aboutPage() {
     return [
-      group('Made by', null, null, maker(),
-        KEN.map(([label, hint, url, aria]) => el('div', { className: 'setting' },
+      group('About', 'Your AI buddy on the desktop: it talks with you, sees your screen, keeps your list, and gets things done.', null, myCard(),
+        ME.map(([label, hint, url, aria]) => el('div', { className: 'setting' },
           el('span', {}, label, el('small', { textContent: hint })),
-          link('Open', () => send({ type: 'open_link', url }), { k: `ken-${label.toLowerCase()}`, aria })))),
+          openLink('Open', url, `me-${label.toLowerCase()}`, aria))),
+        // Credit where it's due (and the AGPL-3.0 asks for it): My Buddy started from Ken Kai's Roamies.
+        el('p', { className: 'credit' }, 'Built on Roamies by Ken Kai. ',
+          openLink('Roamies source', ROAMIES, 'ken-source', 'Open the Roamies source code on GitHub'), ' · ',
+          openLink('Ken on YouTube', KEN_YT, 'ken-youtube', "Open Ken Kai's YouTube channel"))),
       group('Help', null, null,
         el('div', { className: 'links' },
           link('Setup guide', () => act('setup', true), { k: 'setup' }),
@@ -1394,6 +1434,9 @@
     const active = document.activeElement;
     // Never rebuild under someone typing a key: catch up when they leave the field.
     if (!focusKey && !animate && active?.tagName === 'INPUT' && active.closest('.pane')) { deferred = true; return; }
+    // Nor under an open dropdown: rebuilding a <select> while its list is open (the status and usage updates come every
+    // few seconds) made Windows pick whatever option the mouse was over. Catch up once a choice is made or it closes.
+    if (!focusKey && !animate && picking && active?.tagName === 'SELECT' && active.closest('.pane')) { deferred = true; return; }
     deferred = false;
     const keep = focusKey ?? active?.dataset?.k ?? (active?.id?.startsWith('key-') ? active.id : null);
     hideTip();
@@ -1421,6 +1464,17 @@
     if (keep) (document.querySelector(`.pane [data-k="${CSS.escape(keep)}"]`) ?? document.getElementById(keep))?.focus();
   }
   document.addEventListener('focusout', (e) => { if (deferred && e.target.tagName === 'INPUT') setTimeout(() => deferred && render(), 0); });
+  // A dropdown is open from the press that opens it until a choice, Escape or leaving it.
+  const donePicking = () => { if (!picking) return; picking = false; if (deferred) setTimeout(() => deferred && render(), 0); };
+  let pickTimer = 0;
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target.tagName !== 'SELECT') return donePicking();
+    // A list closed without a choice (a click away) leaves no event, so stop waiting after 20 seconds.
+    picking = true; clearTimeout(pickTimer); pickTimer = setTimeout(donePicking, 20000);
+  }, true);
+  document.addEventListener('keydown', (e) => { if (e.target.tagName !== 'SELECT') return; if (e.key === 'Escape' || e.key === 'Tab') donePicking(); else if (e.key === ' ' || e.key === 'Enter' || (e.altKey && e.key.startsWith('Arrow'))) picking = true; }, true);
+  document.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') donePicking(); }, true);
+  document.addEventListener('focusout', (e) => { if (e.target.tagName === 'SELECT') donePicking(); }, true);
   // The window changes size with the screen it opens on: as many rows as fit there.
   let resizeTimer = 0;
   addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => state && render(), 120); });
@@ -1546,6 +1600,7 @@
   window.__panel = (m) => {
     if (m.kind === 'state') {
       const first = !state; state = m.state;
+      if (m.state.theme) setTheme(m.state.theme);
       if (ui.arm && !document.querySelector(`[data-k="${CSS.escape(ui.arm)}"]`)) ui.arm = null;
       render(null, first);
       if (m.state.tab) show(m.state.tab, true); // opened for a reason (asked with nothing signed in: the Model page)
@@ -1609,7 +1664,7 @@
         { name: 'notion', remote: true, where: 'https://mcp.notion.com/mcp', enabled: true, state: 'needs-login', toolCount: 0, error: 'Requires login.' },
         { name: 'everything', remote: false, where: 'npx -y @modelcontextprotocol/server-everything', enabled: true, state: 'error', toolCount: 0, error: 'spawn npx ENOENT' },
         { name: 'files', remote: false, where: 'npx -y @modelcontextprotocol/server-filesystem ~/Desktop', enabled: false, state: 'off', toolCount: 0, error: null }],
-      name: 'Buddy', look: 'jarvis', looks: [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['anime', 'Anime Girl'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']],
+      theme: ['dark', 'system'].includes(q.get('theme')) ? q.get('theme') : 'light', name: 'Buddy', look: 'jarvis', looks: [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['peri', 'Peri'], ['nova', 'Nova'], ['sprout', 'Sprout']],
       size: 'default', sizes: [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']],
       replies: 'voice', fishKey: true, fishModel: 'drama-3', fishFree: false,
       // ?tts=gemini: Gemini as the voice, its key saved.

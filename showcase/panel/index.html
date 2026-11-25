@@ -9,32 +9,25 @@
 <body>
 <div class="frame shut" id="frame">
 <header class="head">
-  <!-- Left Brand and Companion Status -->
+  <!-- Left: the character's face, the name, and a line with its state and model -->
   <div class="head-left">
     <div class="brand-wrap">
-      <svg class="brand-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-        <line x1="9" y1="9" x2="9.01" y2="9"/>
-        <line x1="15" y1="9" x2="15.01" y2="9"/>
-      </svg>
-      <h1 id="title">MY BUDDY</h1>
-    </div>
-    <span class="badge-role">AI COMPANION</span>
-    <div class="status-live">
-      <span class="led on" id="led" aria-hidden="true"></span>
-      <span class="live-label">Live</span>
-    </div>
-    <div class="model-pill" id="head-model-pill" role="button" tabindex="0" title="Click to view AI Model settings">
-      <span class="sparkle">✦</span>
-      <span class="model-name" id="model-name">AI Ready</span>
-      <span class="ver" id="ver"></span>
+      <span class="face-tile"><canvas class="avatar brand-face" id="avatar" aria-hidden="true"></canvas></span>
+      <div class="brand-text">
+        <h1 id="title">My Buddy</h1>
+        <div class="brand-sub">
+          <span class="status-live"><span class="led on" id="led" aria-hidden="true"></span><span class="live-label">Live</span></span>
+          <span class="dotsep" aria-hidden="true">·</span>
+          <span class="model-pill" id="head-model-pill" role="button" tabindex="0" title="Change the AI model"><span class="model-name" id="model-name">AI Ready</span></span>
+          <span class="dotsep" aria-hidden="true">·</span>
+          <span class="ver" id="ver"></span>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Header Live Avatar Preview & Speech line -->
   <div class="head-center">
-    <canvas class="avatar" id="avatar" aria-hidden="true"></canvas>
     <div class="avatar-meta">
       <p class="saying" id="saying" aria-hidden="true"></p>
       <p class="by" id="by"></p>
@@ -42,14 +35,17 @@
     </div>
   </div>
 
-  <!-- Right Actions & Controls -->
+  <!-- Right: updates and Quit, then the window's own buttons (maximise, close) -->
   <div class="head-right">
-    <!-- Updates, on every page: Check for updates, then Update to x (it installs and restarts), then Done. -->
-    <button class="px btn ghost mini" type="button" id="head-update" hidden></button>
-    <!-- Quit, at the end of the row: the first press turns it into Confirm for a few seconds. -->
-    <button class="link danger arm head-quit" type="button" id="head-quit" aria-pressed="false" aria-label="Quit My Buddy"><span class="no" aria-hidden="true">Quit</span><span class="yes" aria-hidden="true">Confirm</span></button>
-    <!-- Close, last on the row: clicking or pressing Esc closes the fullscreen panel -->
-    <button class="head-close-btn" type="button" id="head-close" aria-label="Close panel" data-tip="Close (Esc)"><span class="esc-kbd">ESC</span><span class="close-x">✕</span></button>
+    <!-- Updates: Check for updates, then Update to x (it installs and restarts), then Done. -->
+    <button class="head-btn ghost" type="button" id="head-update" hidden></button>
+    <!-- Quit: the first press turns it into Confirm for a few seconds. -->
+    <button class="head-btn head-quit arm" type="button" id="head-quit" aria-pressed="false" aria-label="Quit My Buddy"><span class="no" aria-hidden="true">Quit</span><span class="yes" aria-hidden="true">Confirm</span></button>
+    <span class="head-sep" aria-hidden="true"></span>
+    <!-- Maximise (or back to the size it was): the window can also be dragged by its header and resized by its edges. -->
+    <button class="win-btn head-max" type="button" id="head-max" aria-label="Maximise" data-tip="Maximise"><svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5"/></svg></button>
+    <!-- Close (Esc does the same). -->
+    <button class="win-btn win-close" type="button" id="head-close" aria-label="Close panel (Esc)" data-tip="Close (Esc)"></button>
   </div>
 </header>
 
@@ -144,7 +140,6 @@
     </ul>
     
     <div class="side-footer">
-      <div class="side-badge">v1.4 • ACTIVE</div>
       <div class="side-shortcut-hint">Press <kbd>Esc</kbd> anytime to close</div>
     </div>
   </nav>

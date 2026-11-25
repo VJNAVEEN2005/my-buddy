@@ -5,7 +5,7 @@
   const R = window.Roamie;
   const { clamp } = R;
   const G = R.glass;
-  const BODY = `400 13px ${G.MONO}`, NOW = `500 13px ${G.MONO}`, SMALL = `400 11px ${G.MONO}`, HEAD = `500 10px ${G.MONO}`;
+  const BODY = `400 13px ${G.SANS}`, NOW = `500 13px ${G.SANS}`, SMALL = `400 11px ${G.SANS}`, HEAD = `500 10px ${G.SANS}`;
   const now = () => performance.now() / 1000;
 
   // ---------- a card beside the Sidekick: placed and sprung beside it, opening from its top-left corner ----------
@@ -68,7 +68,7 @@
       ctx.globalAlpha *= fade;
       G.chrome(ctx, x, y, Math.max(16, w * e), Math.max(16, L.h * e));
       if (a > 0) {
-        ctx.fillStyle = 'rgba(120,255,226,0.06)'; ctx.fillRect(x + 2, y + 2, w - 4, 24);
+        ctx.fillStyle = G.rgba(G.ACC, 0.06); ctx.fillRect(x + 2, y + 2, w - 4, 24);
         ctx.fillStyle = G.DEEP; ctx.fillRect(x + 2, y + 26, w - 4, 1);
         [0, 1].forEach((k) => { ctx.fillStyle = k ? G.DEEP : G.ACC; ctx.fillRect(x + 12 + k * 12, y + 11, 5, 5); });
         G.typed(ctx, this.head, x + w / 2, y + 14, HEAD, G.DIM, a / 0.4, { anchor: 'middle' });
@@ -80,8 +80,8 @@
           if (!s || ra <= 0) return;
           const ry = y + r.y;
           if (r.why) { r.why.forEach((ln, j) => G.typed(ctx, ln, x + 40, ry + 8 + j * 16, SMALL, G.NOTE, (ra - 0.1) / 0.4)); return; }
-          const since = t - s.at, ink = s.state === 'ok' ? G.MID : s.state === 'bad' ? G.CORAL : s.state === 'now' ? G.ACC : '#3f8f88';
-          if (s.state === 'now') { ctx.fillStyle = 'rgba(120,255,226,0.07)'; ctx.fillRect(x + 4, ry, w - 8, r.h); }
+          const since = t - s.at, ink = s.state === 'ok' ? G.MID : s.state === 'bad' ? G.CORAL : s.state === 'now' ? G.ACC : G.DIM;
+          if (s.state === 'now') { ctx.fillStyle = G.rgba(G.ACC, 0.07); ctx.fillRect(x + 4, ry, w - 8, r.h); }
           G.pen(ctx, G.ringPts(x + 24, ry + 12, 7, r.i * 2.3), ink, 2.2, ra / 0.3);
           const font = s.state === 'now' ? NOW : BODY;
           r.lines.forEach((ln, j) => G.typed(ctx, ln, x + 40, ry + 13 + j * 19, font, s.state === 'ok' || !s.state ? G.DIM : G.TEXT, (ra - 0.1) / 0.4));

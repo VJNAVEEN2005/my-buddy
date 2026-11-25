@@ -99,7 +99,9 @@ export function createSecrets({ platform = process.platform, hands = '', dataDir
   }
 
   if (platform === 'linux') {
-    const attrs = (name) => ['service', 'com.kenkai.roamies', 'account', name];
+    // Saved under My Buddy's own name. Keys saved before the rename (under Roamies' name) are still read, and moved over.
+    const SERVICE = 'com.vjn.mybuddy', OLD_SERVICE = 'com.kenkai.roamies';
+    const attrs = (name, service = SERVICE) => ['service', service, 'account', name];
     // secret-tool missing, or no keyring answering on the session bus: say which, so it can be fixed.
     const problem = (r) => {
       if (r.code === -1 && /ENOENT/.test(r.stderr)) return 'secret-tool isn\'t installed (it comes in libsecret-tools on Debian and Ubuntu, libsecret on Fedora and Arch)';
@@ -113,18 +115,23 @@ export function createSecrets({ platform = process.platform, hands = '', dataDir
         const r = await exec('secret-tool', ['lookup', ...attrs(name)]);
         if (r.code === 0) return r.stdout || null;
         // Not found: exit 1 with nothing said. Anything said is a keyring that couldn't be reached.
-        if (r.code === 1 && !String(r.stderr).trim()) return null;
-        throw new Error(problem(r));
+        if (!(r.code === 1 && !String(r.stderr).trim())) throw new Error(problem(r));
+        const old = await exec('secret-tool', ['lookup', ...attrs(name, OLD_SERVICE)]);
+        if (old.code !== 0 || !old.stdout) return null;
+        const moved = await exec('secret-tool', ['store', '--label', `My Buddy: ${name}`, ...attrs(name)], old.stdout);
+        if (moved.code === 0) await exec('secret-tool', ['clear', ...attrs(name, OLD_SERVICE)]);
+        return old.stdout;
       },
       async set(name, value) {
         check(name);
-        const r = await exec('secret-tool', ['store', '--label', `Roamies: ${name}`, ...attrs(name)], value);
+        const r = await exec('secret-tool', ['store', '--label', `My Buddy: ${name}`, ...attrs(name)], value);
         if (r.code !== 0) throw new Error(problem(r));
       },
       async delete(name) {
         check(name);
         const r = await exec('secret-tool', ['clear', ...attrs(name)]);
         if (r.code !== 0 && String(r.stderr).trim()) throw new Error(problem(r));
+        await exec('secret-tool', ['clear', ...attrs(name, OLD_SERVICE)]);
       },
     };
   }

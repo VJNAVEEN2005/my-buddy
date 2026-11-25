@@ -10,6 +10,16 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const invoke = window.__TAURI__?.core?.invoke ?? preview();
   const send = (msg) => invoke('sidecar_send', { msg }).catch(() => {});
+  // Light or Dark: the panel keeps the choice in this app's storage, so the guide opens in it and follows a change.
+  // Light, Dark, or System (whatever the computer is set to), shared with the panel through its storage.
+  const sysDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
+  const resolveTheme = (t) => (t === 'system' ? (sysDark() ? 'dark' : 'light') : t === 'dark' ? 'dark' : 'light');
+  const themeNow = () => { try { const t = localStorage.getItem('buddy-theme'); return t === 'dark' || t === 'system' ? t : 'light'; } catch { return 'light'; } };
+  const paintTheme = () => { document.documentElement.dataset.theme = resolveTheme(themeNow()); };
+  const setTheme = (t) => { try { localStorage.setItem('buddy-theme', t); } catch {} document.documentElement.dataset.theme = resolveTheme(t); };
+  paintTheme();
+  addEventListener('storage', (e) => { if (e.key === 'buddy-theme') paintTheme(); });
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintTheme); } catch {}
   const sfx = (name, arg) => Roamie.sfx?.play(name, arg);
 
   // ---------------------------------------------------------------- the Sidekick
@@ -96,7 +106,7 @@
         }
       }
       if (clock > quipUntil) { quipEl.classList.remove('on'); if (clock > quipUntil + 0.3) quipText = ''; }
-      // Bubble sits just above the head; the stepped tail hangs from it, pointing at the Sidekick.
+      // Bubble sits just above the head; the tail hangs from it, pointing at the Sidekick.
       const qx = clamp(m.x, 125, W - 125), qy = m.y - (K?.R ?? 50) * 1.45 - 6;
       quipEl.style.left = `${qx}px`; quipEl.style.top = `${qy}px`;
       tailEl.style.left = `${clamp(m.x, qx - 100, qx + 100)}px`; tailEl.style.top = `${qy - 0.5}px`;
@@ -259,9 +269,9 @@
         else if (st === 'granted') side = okMark(this.asked[r.id] || !isMac() ? 'Allowed' : 'Already allowed');
         else if (this.waiting === r.id) side = el('span', { className: 'waiting', textContent: 'Waiting for you…' });
         else if (r.id === 'screen' && this.asked.screen) side = el('span', { className: 'pair' },
-          el('button', { className: 'px btn ghost', type: 'button', textContent: 'Settings', onclick: () => { this.openSettings(r); quip('Switch on Roamies'); } }),
+          el('button', { className: 'px btn ghost', type: 'button', textContent: 'Settings', onclick: () => { this.openSettings(r); quip('Switch on My Buddy'); } }),
           el('button', { className: 'px btn primary', type: 'button', textContent: 'Reopen', onclick: () => { quip('Be right back!'); setTimeout(() => invoke('relaunch'), 400); } }));
-        else if (st === 'denied' || this.asked[r.id]) side = el('button', { className: 'px btn ghost', type: 'button', textContent: 'Open Settings', onclick: () => { this.openSettings(r); quip(isMac() ? 'Switch Roamies on!' : 'Turn on desktop apps!', 4); } });
+        else if (st === 'denied' || this.asked[r.id]) side = el('button', { className: 'px btn ghost', type: 'button', textContent: 'Open Settings', onclick: () => { this.openSettings(r); quip(isMac() ? 'Switch My Buddy on!' : 'Turn on desktop apps!', 4); } });
         else if (!isMac()) side = el('span', { className: 'waiting', textContent: 'Checking…' });
         else side = el('button', { className: 'px btn primary', type: 'button', textContent: 'Allow', onclick: () => this.allow(r) });
         const li = el('li', { className: `px row${st === 'granted' ? ' granted' : r === firstPending ? ' focus' : ''}`, id: `perm-${r.id}` },
@@ -279,7 +289,7 @@
       if (state?.login != null) {
         const ls = el('button', { className: 'px switch', type: 'button', role: 'switch' });
         ls.setAttribute('aria-checked', String(!!state.login));
-        ls.setAttribute('aria-label', 'Open Roamies at login');
+        ls.setAttribute('aria-label', 'Open My Buddy at login');
         ls.onclick = () => { const on = ls.getAttribute('aria-checked') !== 'true'; ls.setAttribute('aria-checked', String(on)); send({ type: 'set_login', on }); if (on) quip("See you every morning!"); };
         list.append(el('li', { className: 'px row' },
           el('div', {}, el('h2', { textContent: 'Open at login' }), el('p', { textContent: 'Start with your computer.' })), ls));
@@ -564,7 +574,7 @@
       $('fish-change').setAttribute('aria-expanded', String(replies.changing));
       $('fish-save').disabled = replies.saving;
       $('fish-save').textContent = replies.saving ? 'Checking…' : 'Save';
-      // Talking hands-free (needs voice): open the mic for an answer, and wake on "Hey Roamies" where there's a wake word.
+      // Talking hands-free (needs voice): open the mic for an answer, and wake on "Hey Buddy" where there's a wake word.
       $('talk-rows').hidden = !state?.voice;
       $('wake-row').hidden = !(state?.wakeOk ?? isMac());
       $('autolisten-switch').setAttribute('aria-checked', String(!!state?.autoListen));
@@ -931,7 +941,7 @@
       $('h-4').textContent = mac ? 'Find me up here' : linux ? 'Find me in the tray' : 'Find me down here';
       $('find-where').textContent = mac ? 'I live in your menu bar. Click ' : linux ? 'I live in the system tray. Click ' : 'I live in the system tray, at the bottom right of your taskbar. Click ';
       // Linux: GNOME shows no tray without an extension, and opening Roamies again works anywhere.
-      $('find-tip').innerHTML = linux ? "No tray on your desktop? On GNOME, add the <b>AppIndicator</b> extension. Or just open Roamies again from your apps: that opens my panel." : "Don't see me? Click the <b>^</b> arrow next to the clock. To keep me in view, drag my icon onto the taskbar.";
+      $('find-tip').innerHTML = linux ? "No tray on your desktop? On GNOME, add the <b>AppIndicator</b> extension. Or just open My Buddy again from your apps: that opens my panel." : "Don't see me? Click the <b>^</b> arrow next to the clock. To keep me in view, drag my icon onto the taskbar.";
       $('find-tip').hidden = mac;
       // Windows: straight to the Taskbar settings, where Roamies is switched on under Other system tray icons.
       $('find-show').hidden = mac || linux;
@@ -1108,9 +1118,9 @@
       }
       // Fixed lines (not something it's saying) show at once; a turn's words reveal as they stream (above).
       const FIXED = {
-        skipped: ['Maybe later', 'No problem. Get to Know Me is in the Roamies panel any time.'],
-        no_model: ['I need a brain first', 'Connect an AI account in the Roamies panel, then try Get to Know Me again.'],
-        failed: ["That didn't work", "I couldn't reach the AI. Try Get to Know Me from the Roamies panel in a moment."],
+        skipped: ['Maybe later', 'No problem. Get to Know Me is in the My Buddy panel any time.'],
+        no_model: ['I need a brain first', 'Connect an AI account in the My Buddy panel, then try Get to Know Me again.'],
+        failed: ["That didn't work", "I couldn't reach the AI. Try Get to Know Me from the My Buddy panel in a moment."],
       };
       if (FIXED[st] && chat.fixed !== st) { chat.fixed = st; reveal.now('chat-q', FIXED[st][0]); reveal.now('chat-lead', FIXED[st][1]); reveal.now('chat-hint', ''); }
       else if (thinking && !chat.n && !reveal.shown('chat-q')) reveal.now('chat-q', 'Getting to know you');
@@ -1162,8 +1172,8 @@
   // ---------------------------------------------------------------- flow
   // ---------------------------------------------------------------- step 0: look and size
   // Picked here, previewed on the guide right away, saved by the app (Settings has the same choices).
-  const LOOKS = [['classic', 'Roamie'], ['jarvis', 'JARVIS'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['anime', 'Anime Girl'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']], SIZES = [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']];
-  const LOOK_QUIPS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: 'Alright, let\'s do this.', rita: 'Shall we get to work?' }, SIZE_QUIPS = { default: 'Full size!', small: 'Fun size!', cursor: 'Tiny pointer me!' };
+  const LOOKS = [['jarvis', 'Buddy'], ['classic', 'Pixel'], ['cosmo', 'Cosmo'], ['peri', 'Peri'], ['nova', 'Nova'], ['sprout', 'Sprout']], SIZES = [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']];
+  const LOOK_QUIPS = { jarvis: 'Hey! Buddy here.', classic: 'Pixel me!', cosmo: 'Bloop bloop! Cosmo here, ready to explore!', peri: 'Boo! Peri here, your little companion.', nova: 'Hi hi! Nova here, ready when you are.', sprout: 'Hiya! Sprout here, let\'s grow something good.' }, SIZE_QUIPS = { default: 'Full size!', small: 'Fun size!', cursor: 'Tiny pointer me!' };
   const look = {
     radios(id, list, value, pickIt) {
       $(id).replaceChildren(...list.map(([v, label]) => {
@@ -1175,9 +1185,10 @@
       }));
     },
     render() {
-      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'classic')) ?? LOOKS[0])[1]}.`;
-      look.radios('looks', LOOKS, state?.look ?? 'classic', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
+      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'jarvis')) ?? LOOKS[0])[1]}.`;
+      look.radios('looks', LOOKS, state?.look ?? 'jarvis', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
       look.radios('sizes', SIZES, state?.size ?? 'default', (v) => { state.size = v; sidekick.setForm?.(v); send({ type: 'ob_size', size: v }); quip(SIZE_QUIPS[v]); look.render(); });
+      look.radios('themes', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']], themeNow(), (v) => { setTheme(v); send({ type: 'ob_theme', theme: v }); look.render(); });
     },
   };
 
@@ -1325,10 +1336,10 @@
     const sys = win ? { type: 'perms', mic: q.get('blocked') === '1' ? 'denied' : 'granted', input: true } : { type: 'perms', mic: pre, speech: old ? pre : 'granted', speechNeeded: old, screen: pre, accessibility: pre };
     const st = {
       // &filesAsked=1: Allow was tapped for the folders in an earlier run. &replies=voice&fish=1: voice already on.
-      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'classic', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
+      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'jarvis', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
       // &tts=gemini&gemini=1: Gemini as the voice, its key saved.
       replies: q.get('replies') === 'voice' ? 'voice' : 'text', fishKey: q.get('fish') === '1',
-      bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/Roamies 0.1.33.AppImage' --${k}`])) : null,
+      bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/My Buddy 0.1.33.AppImage' --${k}`])) : null,
       tts: q.get('tts') === 'gemini' ? 'gemini' : 'fish', geminiKey: q.get('gemini') === '1', geminiVoice: 'Kore',
       geminiVoices: [['Zephyr', 'Bright'], ['Puck', 'Upbeat'], ['Charon', 'Informative'], ['Kore', 'Firm']].map(([id, style]) => ({ id, style })),
       keys: q.get('platform') === 'win32' ? { talk: ['control', 'option'], write: ['control', 'shift'], summon: 'Control+Shift+KeyS', snap: 'Control+Shift+KeyA' } : { talk: ['control', 'option'], write: win ? ['control', 'shift'] : ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' }, connected: null,
@@ -1408,7 +1419,7 @@
         // A canned chat: &chat=nomodel previews not being signed in.
         if (q.get('chat') === 'nomodel') return reply({ kind: 'chat_state', status: 'no_model' }, 300);
         const turns = [
-          ["[wave] Hi Ken, I'm Roamie! I'm here to help you get things done and keep you on track. I've got four quick questions.", 'What are you working on these days?', ''],
+          ["[wave] Hi Ken, I'm Buddy! I'm here to help you get things done and keep you on track. I've got four quick questions.", 'What are you working on these days?', ''],
           ['Night shifts and NP exam prep, that is a lot to juggle.', 'What does a normal week look like for you?', 'Could be the hospital, flashcards in Anki, or something else entirely.'],
           ['Phone, Anki and Google Docs, a tight little setup.', "What's the actual thing you're going for right now?", 'Could be passing the boards, a new role, or something else entirely.'],
           ['Passing the boards in March, love it.', 'Okay, last one: have you used AI helpers before?', ''],

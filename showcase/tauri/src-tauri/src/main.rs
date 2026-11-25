@@ -47,6 +47,8 @@ static PANEL_CLOSING: AtomicBool = AtomicBool::new(false);
 const PANEL_SHUT_MS: u64 = 150;
 /// The panel sits above the icon (a taskbar at the bottom), so it opens from its bottom edge.
 static PANEL_FROM_BOTTOM: AtomicBool = AtomicBool::new(false);
+// Set once the panel has been placed: after that it opens where it was left, at the size it was left (it's resizable).
+static PANEL_PLACED: AtomicBool = AtomicBool::new(false);
 
 fn panel_open_js() -> String {
     format!("window.__panelOpen&&__panelOpen({})", PANEL_FROM_BOTTOM.load(Ordering::SeqCst))
@@ -675,6 +677,19 @@ fn relaunch(app: AppHandle) {
     app.restart();
 }
 
+/// The panel's maximise button (and a double-click on its header): fills the screen, or back to the size it was.
+#[tauri::command]
+fn panel_maximize(app: AppHandle) -> bool {
+    let Some(w) = app.get_webview_window(PANEL_LABEL) else { return false };
+    if w.is_maximized().unwrap_or(false) {
+        let _ = w.unmaximize();
+        false
+    } else {
+        let _ = w.maximize();
+        true
+    }
+}
+
 /// The panel's Esc, or an action that happens somewhere else (asking, the setup guide).
 #[tauri::command]
 fn panel_hide(app: AppHandle) {
@@ -774,6 +789,9 @@ fn tray_image() -> tauri::image::Image<'static> {
 // Wide enough for the sidebar beside a page as roomy as the old one-column panel.
 const PANEL_W: f64 = 860.0;
 const PANEL_H: f64 = 600.0;
+// As small as it goes: the sidebar folds to its icons below 760 wide.
+const PANEL_MIN_W: f64 = 560.0;
+const PANEL_MIN_H: f64 = 420.0;
 
 /// Plays the panel's close animation, then hides it (unless it was opened again meanwhile). why: what closed it,
 /// for the log (blur, icon, esc, panel).
@@ -793,6 +811,7 @@ pub(crate) fn hide_panel(app: &AppHandle, why: &'static str) {
         }
         PANEL_CLOSING.store(false, Ordering::SeqCst);
         if let Some(w) = app.get_webview_window(PANEL_LABEL) {
+            save_panel_rect(&w);
             let _ = w.hide();
         }
         to_sidecar(&app, &json!({ "type": "panel_closed", "why": why }));
@@ -839,6 +858,7 @@ pub(crate) fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: boo
             let b = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("panel/index.html".into()))
                 .title("My Buddy")
                 .inner_size(PANEL_W, PANEL_H)
+                .min_inner_size(PANEL_MIN_W, PANEL_MIN_H)
                 .resizable(true)
                 .maximizable(true)
                 .minimizable(true)
@@ -853,6 +873,7 @@ pub(crate) fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: boo
             let b = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("panel/index.html".into()))
                 .title("My Buddy")
                 .inner_size(PANEL_W, PANEL_H)
+                .min_inner_size(PANEL_MIN_W, PANEL_MIN_H)
                 .resizable(true)
                 .maximizable(true)
                 .minimizable(false)
@@ -902,8 +923,33 @@ pub(crate) fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: boo
     to_sidecar(app, &json!({ "type": "panel_open" }));
 }
 
-/// Expands to cover the full screen of the active monitor.
+/// Where it was left last time (saved in panel-window.json when it closes), if that's still on a screen. Otherwise
+/// the first time: a window of PANEL_W x PANEL_H (smaller on a small screen) in the middle of the screen with the
+/// icon (or the mouse). After that it opens where it was left, at the size it was left: it can be resized, and
+/// maximised with its button. Never fullscreen by itself.
 fn place_panel(app: &AppHandle, w: &WebviewWindow, rect: Option<tauri::Rect>) -> bool {
+    if PANEL_PLACED.load(Ordering::SeqCst) {
+        return false;
+    }
+    // Where it was last left (kept across restarts), if that spot is still on a screen.
+    if let Some((x, y, pw, ph)) = load_panel_rect() {
+        let (cx, cy) = (x + pw / 2.0, y + ph / 2.0);
+        let screen = app.available_monitors().ok().unwrap_or_default().into_iter().find(|m| {
+            let (mx, my) = (m.position().x as f64, m.position().y as f64);
+            let (mw, mh) = (m.size().width as f64, m.size().height as f64);
+            cx >= mx && cx < mx + mw && cy >= my && cy < my + mh
+        });
+        if let Some(m) = screen {
+            let s = m.scale_factor();
+            let (mw, mh) = (m.size().width as f64, m.size().height as f64);
+            let pw = pw.clamp(PANEL_MIN_W * s, mw);
+            let ph = ph.clamp(PANEL_MIN_H * s, mh);
+            set_panel_size(w, pw, ph, s);
+            set_panel_position(w, x, y, s);
+            PANEL_PLACED.store(true, Ordering::SeqCst);
+            return false;
+        }
+    }
     let icon = rect.map(|r| {
         let p = r.position.to_physical::<f64>(1.0);
         let z = r.size.to_physical::<f64>(1.0);
@@ -921,9 +967,39 @@ fn place_panel(app: &AppHandle, w: &WebviewWindow, rect: Option<tauri::Rect>) ->
     let s = m.scale_factor();
     let (mx, my) = (m.position().x as f64, m.position().y as f64);
     let (mw, mh) = (m.size().width as f64, m.size().height as f64);
-    set_panel_size(w, mw, mh, s);
-    set_panel_position(w, mx, my, s);
+    let pw = (PANEL_W * s).min(mw * 0.92);
+    let ph = (PANEL_H * s).min(mh * 0.9);
+    set_panel_size(w, pw, ph, s);
+    set_panel_position(w, mx + (mw - pw) / 2.0, my + (mh - ph) / 2.0, s);
+    PANEL_PLACED.store(true, Ordering::SeqCst);
     false
+}
+
+/// The file that keeps the panel's last size and spot (in pixels), so it opens there after a restart too.
+fn panel_rect_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    let dir = std::path::Path::new(&home).join("Roamies").join("Data");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir.join("panel-window.json"))
+}
+/// Saves where the panel is and how big, when it closes. Not while maximised: it reopens at the size it was before.
+fn save_panel_rect(w: &WebviewWindow) {
+    if w.is_maximized().unwrap_or(false) || w.is_minimized().unwrap_or(false) {
+        return;
+    }
+    let (Ok(p), Ok(z)) = (w.outer_position(), w.inner_size()) else { return };
+    if z.width == 0 || z.height == 0 {
+        return;
+    }
+    if let Some(f) = panel_rect_path() {
+        let _ = std::fs::write(f, json!({ "x": p.x, "y": p.y, "w": z.width, "h": z.height }).to_string());
+    }
+}
+fn load_panel_rect() -> Option<(f64, f64, f64, f64)> {
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(panel_rect_path()?).ok()?).ok()?;
+    let n = |k: &str| v.get(k).and_then(Value::as_f64);
+    let (x, y, pw, ph) = (n("x")?, n("y")?, n("w")?, n("h")?);
+    (pw > 0.0 && ph > 0.0).then_some((x, y, pw, ph))
 }
 
 // macOS converts physical sizes with the scale of the screen the window is on now, not the one it's going to,
@@ -2011,7 +2087,7 @@ fn main() {
         .manage(TalkChord(Mutex::new(vec!["control".into(), "option".into()])))
         .manage(VoiceModel(Mutex::new(None)))
         .manage(PermGuide(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![buddy, ink_wait, set_hot, set_hit_rects, sidecar_send, set_typing, perm_status, perm_request, perm_guide, screen_check, open_settings, onboarding_finish, guide_close, panel_hide, esc_watch, relaunch, focus_guide, guide_aside, drag_window])
+        .invoke_handler(tauri::generate_handler![buddy, ink_wait, set_hot, set_hit_rects, sidecar_send, set_typing, perm_status, perm_request, perm_guide, screen_check, open_settings, onboarding_finish, guide_close, panel_hide, panel_maximize, esc_watch, relaunch, focus_guide, guide_aside, drag_window])
         .on_menu_event(|app, e| match e.id.as_ref() {
             "quit" => app.exit(0),
             "restart" => spawn_sidecar(app),

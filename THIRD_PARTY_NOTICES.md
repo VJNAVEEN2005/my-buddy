@@ -1,6 +1,6 @@
 # Third-party notices
 
-Roamies is licensed under [AGPL-3.0](LICENSE). It builds on the components below, each under its own license.
+My Buddy (by Naveen VJ) is licensed under [AGPL-3.0](LICENSE). It is built on [Roamies](https://github.com/KenKaiii/Roamies) by Ken Kai (AGPL-3.0), and on the components below, each under its own license.
 
 | Component | How it's used | License |
 | --------- | ------------- | ------- |

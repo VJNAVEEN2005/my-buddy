@@ -505,6 +505,14 @@
     addEventListener('resize', () => requestAnimationFrame(() => requestAnimationFrame(flush)), { once: true });
   };
 
+  // The overlay's theme: bubbles (glass.js) and cards (ink.js). 'system' follows the computer's light or dark mode.
+  let themePick = 'light';
+  const themeMq = (() => { try { return matchMedia('(prefers-color-scheme: dark)'); } catch { return null; } })();
+  const applyTheme = () => {
+    const t = themePick === 'system' ? (themeMq?.matches ? 'dark' : 'light') : themePick === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t; Roamie.glass?.setTheme?.(t); Roamie.inkTheme?.(t);
+  };
+  themeMq?.addEventListener?.('change', () => { if (themePick === 'system') applyTheme(); });
   window.__roamieHost = (m) => {
     Roamie.wake?.(); // the frame loop naps while the sidekick is hidden
     if (m.kind === 'speech') { Roamie.voiceOut?.handle(m); return; } // plays on, even while it changes screens
@@ -512,6 +520,9 @@
     if (held) { held.q.push(m); return; }
     if (m.kind === 'notch') { if (Roamie.notch) { Roamie.notch.enabled = !!m.on; if (m.style) Roamie.notch.style = m.style; if (!m.on) Roamie.notch.close(); } return; }
     if (m.kind === 'sound') { if (Roamie.sfx) Roamie.sfx.enabled = m.on; return; }
+    // Light or Dark (the panel's Appearance > Theme): the cards, bubbles and the ask bar; the characters keep their colours.
+    // Light, Dark, or System (follows the computer, and switches when it does).
+    if (m.kind === 'theme') { themePick = m.theme; applyTheme(); return; }
     if (m.kind === 'size') { for (const t of Roamie.tiles ?? []) t.creature.setForm?.(m.size); return; }
     if (m.kind === 'pixel_color') { for (const t of Roamie.tiles ?? []) t.creature.setColor?.(m.color); return; }
     if (m.kind === 'pixel_texture') { for (const t of Roamie.tiles ?? []) t.creature.setMatrixStyle?.(m.texture); return; }

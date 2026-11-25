@@ -390,10 +390,13 @@
       k.appear(entrance(), x, y);
     };
     const MAX_COLS = 38, MAX_LINES = 7, THINK_COLS = 28, THINK_LINES = 1, METER = 7;
-    // Bubble text: Martian Mono (0.7 em per letter), sized to the bubble's line grid.
+    // Bubble text sits on a letter grid (each letter in its own column), so it needs a monospace font: Cascadia Mono
+    // (Windows' own, 0.59 em per letter), else Consolas or the system's. A proportional font's wide letters overran
+    // their columns and were cut at the bubble's edge. Right-to-left lines are drawn whole, in the system font.
+    const BUBBLE_FONT = '"Cascadia Mono", Consolas, ui-monospace, Menlo, "Roamies Arabic", monospace';
     const fontPx = (t) => Math.round(CH * t * 0.64 * 2) / 2;
-    const colW = (t) => fontPx(t) * 0.7 + 0.35;
-    const TEXT_INK = '#dcfff6', TEXT_ACCENT = '#78ffe2';
+    const colW = (t) => fontPx(t) * 0.62 + 0.35;
+    // Bubble text and links: the glass palette's, so they follow the theme.
     const T = () => clamp(k.P * 0.42, 1.4, 2.4);
     const G = R.glass;
     // Padding inside a bubble. The thinking tag is slim, one line, with its three dots before the words.
@@ -401,7 +404,7 @@
     const padX = (bb) => (bb.kind === 'thought' ? 13 : k.P * 3), padY = (bb) => (bb.kind === 'thought' ? 5 : k.P * 3);
     const dotsDx = (bb) => (bb.kind === 'thought' && bb.text ? DOTS_W + 10 : 0);
     // Under a question: how to answer it.
-    const HINT = 'enter to send · esc to skip', HINT_F = `400 11px ${G.MONO}`, HINT_H = 18;
+    const HINT = 'enter to send · esc to skip', HINT_F = `400 11px ${G.SANS}`, HINT_H = 18;
     const hintH = (bb) => (bb.input && !bb.input.listen && !bb.input.choices ? HINT_H : 0);
     // A yes/no question: its buttons sit in a row under it instead of the hint.
     const CHOICE_GAP = 8, CHOICE_TOP = 12;
@@ -716,13 +719,13 @@
         let f = fonts.get(st);
         if (!f) {
           const w = st & (md?.BOLD ?? 0) ? 700 : base, it = st & (md?.ITAL ?? 0) ? 'italic ' : '';
-          f = `${it}${w} ${fpx}px "Martian Mono", "Roamies Arabic", Menlo, ui-monospace, monospace`; fonts.set(st, f);
+          f = `${it}${w} ${fpx}px ${BUBBLE_FONT}`; fonts.set(st, f);
         }
         return f;
       };
       let curFont = '';
       tctx.textBaseline = 'middle'; tctx.textAlign = 'left';
-      const ink = dim ? css(PAL[L - 2], 0.9) : TEXT_INK, accent = dim ? ink : TEXT_ACCENT;
+      const ink = dim ? (G.theme === 'light' ? G.DIM : css(PAL[L - 2], 0.9)) : G.TEXT, accent = dim ? ink : G.LINK;
       for (let li = first; li <= last; li++) {
         const line = lines[li], cy = (li - s0 + 0.5) * lh;
         // Lines scrolling past the top or bottom fade out instead of being cut in half.
@@ -734,7 +737,7 @@
         if (R.rtl(line.s)) {
           const n = Math.min(line.s.length, shown - line.start);
           if (n > 0) {
-            const rf = R.rtlFont(line.s, fontFor(0)); // its own narrow space between Arabic words
+            const rf = R.rtlFont(line.s, `${base} ${fpx}px ${G.SANS}`); // its own narrow space between Arabic words
             if (curFont !== rf) { curFont = rf; tctx.font = rf; }
             tctx.fillStyle = ink; tctx.direction = 'rtl'; tctx.textAlign = 'right';
             tctx.fillText(line.s.slice(0, n).trimEnd(), iw, cy, iw);
@@ -747,7 +750,7 @@
           if (idx >= shown) break;
           if (line.s[j] === ' ') {
             // A link's underline runs on under the spaces between its words.
-            if (R.md && (bb.sty?.[idx] ?? 0) & R.md.LINK && (bb.sty?.[idx + 1] ?? 0) & R.md.LINK) { tctx.fillStyle = TEXT_ACCENT; tctx.fillRect(j * cw, cy + lh * 0.36, cw, Math.max(1, t * 0.4)); }
+            if (R.md && (bb.sty?.[idx] ?? 0) & R.md.LINK && (bb.sty?.[idx + 1] ?? 0) & R.md.LINK) { tctx.fillStyle = G.LINK; tctx.fillRect(j * cw, cy + lh * 0.36, cw, Math.max(1, t * 0.4)); }
             continue;
           }
           const em = emojiAt(line.s, j);
@@ -758,7 +761,7 @@
           if (f !== curFont) { tctx.font = f; curFont = f; }
           const age = ph ? 9 : now - (bb.at[idx] ?? 0), x = j * cw + (em ? cw * 0.15 : 0), y = cy;
           const marked = md && st & (md.CODE | md.LINK);
-          tctx.fillStyle = age < 0.12 ? '#ffffff' : marked ? accent : ink;
+          tctx.fillStyle = age < 0.12 ? G.LAND : marked ? accent : ink;
           tctx.fillText(ch, x, y);
           if (md && st & md.LINK) tctx.fillRect(x, cy + lh * 0.36, cw, Math.max(1, t * 0.4));
           if (em) j += em.n - 1;
@@ -785,7 +788,7 @@
     };
 
     // ---- the task tag under the body: a spinner, what it's doing (dim) and what on (bright), then a tick or a cross ----
-    const TAG_VERB = `400 12px ${G.MONO}`, TAG_THING = `500 12px ${G.MONO}`, TAG_H = 30, TAG_MAX = 340;
+    const TAG_VERB = `400 12px ${G.SANS}`, TAG_THING = `500 12px ${G.SANS}`, TAG_H = 30, TAG_MAX = 340;
     // label is the verb ("running"), detail the thing ("npm test"); a label alone shows bright.
     const tagWords = (st) => {
       if (st.words) return st.words;

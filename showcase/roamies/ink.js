@@ -11,8 +11,9 @@
   // Card and diagram text is handwritten, like an Excalidraw sketch (Virgil, Latin letters only; the rest falls back).
   const P = 4, SANS = '"Buddy Hand", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Roamies Arabic", sans-serif', DISPLAY = '"Buddy Hand", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Roamies Arabic", sans-serif';
   // Excalidraw-inspired White Theme palette
-  const ACC = '#18181b', HOT = '#09090b', MID = '#71717a', DEEP = '#f4f4f5', EDGE = 'rgba(0, 0, 0, 0.12)';
-  const GLASS = 'rgba(255, 255, 255, 0.98)', TEXT = '#09090b', DIM = '#52525b', INKDARK = '#09090b';
+  // Light (this) or Dark (R.inkTheme below): follows the panel's Appearance > Theme.
+  let ACC = '#18181b', HOT = '#09090b', MID = '#71717a', DEEP = '#f4f4f5', EDGE = 'rgba(0, 0, 0, 0.12)';
+  let GLASS = 'rgba(255, 255, 255, 0.98)', TEXT = '#09090b', DIM = '#52525b', INKDARK = '#09090b', CHIPINK = '#ffffff', LAND = '#a1a1aa', SHADE = 'rgba(0, 0, 0, 0.08)';
   const TONES = { accent: ACC, teal: '#0c8599', amber: '#d97706', coral: '#e11d48', lilac: '#7c3aed', sky: '#0284c7', lime: '#16a34a', red: '#dc2626', white: '#ffffff' };
   const LED = ['#ffffff', '#f4f4f5', '#e4e4e7', '#27272a', '#09090b'];
   const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -242,7 +243,7 @@
     const path = outlinePath(x, y, w, h, o.corner ?? 2 * P), edge = o.edge || '#e4e4e7';
     c.save();
     c.fillStyle = o.fill || GLASS;
-    c.shadowColor = 'rgba(0, 0, 0, 0.08)';
+    c.shadowColor = SHADE;
     c.shadowBlur = 14;
     c.shadowOffsetY = 4;
     c.fill(path);
@@ -263,7 +264,7 @@
     if (n < str.length) touch(0.1);
     if (o.rim) { c.lineWidth = o.rim; c.strokeStyle = EDGE; c.lineJoin = 'round'; c.strokeText(str.slice(0, n), x0, y); }
     if (n >= str.length || o.land === false) { c.fillStyle = color; c.fillText(str.slice(0, n), x0, y); }
-    else { const head = str.slice(0, Math.max(0, n - 2)); c.fillStyle = color; c.fillText(head, x0, y); c.fillStyle = '#ffffff'; c.fillText(str.slice(head.length, n), x0 + c.measureText(head).width, y); }
+    else { const head = str.slice(0, Math.max(0, n - 2)); c.fillStyle = color; c.fillText(head, x0, y); c.fillStyle = LAND; c.fillText(str.slice(head.length, n), x0 + c.measureText(head).width, y); }
     c.restore();
     return full;
   }
@@ -345,7 +346,7 @@
     b.fillStyle = mixHex(fill, '#000000', 0.62); b.fill(outlinePath(x, y + (o.down ? 1 : 3), w, h, P));
     b.fillStyle = o.hover ? mixHex(fill, '#ffffff', 0.3) : fill; b.fill(outlinePath(x, y, w, h, P));
     b.fillStyle = 'rgba(255,255,255,0.55)'; b.fillRect(x + P, y + 1, w - 2 * P, 1.5); b.fillStyle = 'rgba(3, 14, 39,0.25)'; b.fillRect(x + P, y + h - 2.5, w - 2 * P, 1.5);
-    typed(b, str, cx, cy, CHIP(k), INKDARK, type, { anchor: 'middle', baseline: 'middle', land: false });
+    typed(b, str, cx, cy, CHIP(k), CHIPINK, type, { anchor: 'middle', baseline: 'middle', land: false });
     b.restore();
   }
   // What's on screen (from the sidecar: controls read this request), so names avoid covering words.
@@ -1959,6 +1960,14 @@
   // ---------------------------------------------------------------- speech: the caption at the bottom
   const cap = document.createElement('div');
   cap.setAttribute('role', 'status'); cap.setAttribute('aria-live', 'polite');
+  const capStyle = () => Object.assign(cap.style, { color: TEXT, background: GLASS, border: `1.5px solid ${ACC}`, boxShadow: `0 0 12px ${rgba(ACC, 0.45)}` });
+  R.inkTheme = (t) => {
+    const dark = t === 'dark';
+    ({ ACC, HOT, MID, DEEP, EDGE, GLASS, TEXT, DIM, INKDARK, CHIPINK, LAND, SHADE } = dark
+      ? { ACC: '#e4e4e7', HOT: '#fafafa', MID: '#a1a1aa', DEEP: '#1c1c1f', EDGE: 'rgba(255, 255, 255, 0.16)', GLASS: 'rgba(16, 16, 18, 0.97)', TEXT: '#fafafa', DIM: '#a1a1aa', INKDARK: '#fafafa', CHIPINK: '#09090b', LAND: '#71717a', SHADE: 'rgba(0, 0, 0, 0.4)' }
+      : { ACC: '#18181b', HOT: '#09090b', MID: '#71717a', DEEP: '#f4f4f5', EDGE: 'rgba(0, 0, 0, 0.12)', GLASS: 'rgba(255, 255, 255, 0.98)', TEXT: '#09090b', DIM: '#52525b', INKDARK: '#09090b', CHIPINK: '#ffffff', LAND: '#a1a1aa', SHADE: 'rgba(0, 0, 0, 0.08)' });
+    TONES.accent = ACC; capStyle();
+  };
   Object.assign(cap.style, { position: 'fixed', left: '50%', bottom: '18px', transform: 'translateX(-50%)', maxWidth: 'min(720px, 80vw)', padding: '8px 16px', font: `500 13px ${SANS}`, color: TEXT, background: GLASS, border: `1.5px solid ${ACC}`, boxShadow: `0 0 12px ${rgba(ACC, 0.45)}`, borderRadius: '2px', opacity: '0', transition: 'opacity .2s', pointerEvents: 'none', textAlign: 'center', zIndex: '5' });
   const mountCap = () => document.body.appendChild(cap);
   if (document.body) mountCap(); else document.addEventListener('DOMContentLoaded', mountCap);

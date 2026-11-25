@@ -99,7 +99,6 @@ const say = (text, mood) => (onboarding ? ob({ kind: 'say', text, mood }) : ui({
 const sayOut = say;
 
 const VERSION = process.env.ROAMIES_VERSION || '0.0.0';
-const UPDATE_REPO = 'KenKaiii/Roamies';
 const HOME = os.homedir();
 // The chat works from ~/Roamies: commands run there and files given without a full path land there (Data/ and
 // Skills/ inside it stay write-protected by safety.mjs). Made up front so Claude Code always has a folder to start in.
@@ -136,7 +135,7 @@ const DEFAULTS = {
   fallbacks: ['', ''], // backup models, in order, for when the default hits its usage limit (limits.mjs)
   efforts: {}, // how hard each model slot thinks: default, each heavy job, backup1, backup2 ('' = automatic, 'off', or a level)
   notch: 'off', // where I appear: 'off' (beside the cursor, default), 'drop' (the capsule) or 'spread' (a Mac's notch; see notchMode)
-  onboarded: false, onboardStep: 0, filesAsked: false, keys: DEFAULT_KEYS, muteWhileTalking: true, volume: 100, autoListen: false, listenEvery: false, listenSecs: 8, lite: false, wakeWord: false, setupVersion: 0, size: 'default', look: 'jarvis', introDone: false,
+  onboarded: false, onboardStep: 0, filesAsked: false, keys: DEFAULT_KEYS, muteWhileTalking: true, volume: 100, autoListen: false, listenEvery: false, listenSecs: 8, lite: false, wakeWord: false, setupVersion: 0, size: 'default', theme: 'light', look: 'jarvis', introDone: false,
   replies: 'text', // 'voice': spoken (with Fish Audio or Gemini) as well as shown
   speechLang: 'auto', // the language talking is recognised in (macOS): 'auto' follows the Mac's language list, or a locale like 'ar-SA'
   tts: 'fish', // which one speaks: 'fish' (Fish Audio), 'gemini' or 'voicestudio' (the VoiceStudio app on this computer)
@@ -2020,7 +2019,7 @@ function onUpdateStatus(m) {
     say(`Installed ${m.version}. Restarting!`, 'happy');
   } else if (m.state === 'error') {
     update.installing = false; update.manual = false; menu();
-    if (shown) say(`${p.text} You can always grab it from github.com/${UPDATE_REPO}/releases.`, 'concerned');
+    if (shown) say(p.text, 'concerned');
     else console.error('update check', String(m.error ?? 'unknown error').slice(0, 300));
   }
 }
@@ -2219,7 +2218,7 @@ async function saveDiagnostics() {
     logLine('diagnostics', { bytes: (await fs.stat(file)).size });
     reveal(file);
     const where = path.basename(path.dirname(file)) || 'your home folder';
-    say(`Saved ${path.basename(file)} in ${where}. Attach it to an issue at github.com/KenKaiii/Roamies/issues, or send it to whoever is helping you.`, 'happy');
+    say(`Saved ${path.basename(file)} in ${where}. Send it to Naveen, or to whoever is helping you.`, 'happy');
     panelNote(`Saved ${path.basename(file)} in ${where}.`);
   } catch (e) {
     console.error('diagnostics', e);
@@ -2352,7 +2351,7 @@ function panelState() {
     study: studyNow(),
     replays: listReplays(),
     look: config.look ?? 'jarvis', looks: LOOKS.map(([id, label]) => [id, label]), name: lookName(),
-    size: sizeNow(), sizes: SIZES,
+    size: sizeNow(), sizes: SIZES, theme: ['dark', 'system'].includes(config.theme) ? config.theme : 'light',
     replies: VOICE_ON() ? 'voice' : 'text', tts: tts().id, fishKey: hasVoiceKey('fish'), geminiKey: hasVoiceKey('gemini'),
     fishModel: config.fishModel, fishModels: FISH_CHOICES, fishFree: tts().id === 'fish' && speech.on && speech.model.endsWith('-free'),
     geminiVoice: geminiVoice(), geminiVoices: GEMINI_VOICES, geminiShared: ttsKeys.gemini === 'shared',
@@ -2604,6 +2603,8 @@ async function onMenu(id, via) {
   else if (id.startsWith('signout:')) signOut(id.slice(8));
   else if (id.startsWith('local:connect:')) connectServer(id.slice(14));
   else if (id.startsWith('local:remove:')) removeServer(id.slice(13));
+  // The panel's theme (Light, Dark, or System). The panel switches itself at once; this keeps it for next time.
+  else if (id === 'theme:light' || id === 'theme:dark' || id === 'theme:system') { config.theme = id.slice(6); saveConfig(); ui({ kind: 'theme', theme: config.theme }); menu(); }
   else if (id.startsWith('size:') && SIZES.some(([s]) => s === id.slice(5))) { config.size = id.slice(5); saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (id.startsWith('look:')) setLook(id.slice(5));
   else if (id === 'replies:text') setReplies('text');
@@ -2944,6 +2945,7 @@ async function onGuide(m) {
   else if (m.type === 'ob_wake' && WAKE_OK) { config.wakeWord = !!m.on; saveConfig(); agentStale = true; voiceConfig(); menu(); obState(); }
   else if (m.type === 'ob_voice_model') getVoiceModel();
   else if (m.type === 'ob_look') setLook(m.look);
+  else if (m.type === 'ob_theme' && ['light', 'dark', 'system'].includes(m.theme)) { config.theme = m.theme; saveConfig(); ui({ kind: 'theme', theme: config.theme }); menu(); }
   else if (m.type === 'ob_size' && SIZES.some(([s]) => s === m.size)) { config.size = m.size; saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (m.type === 'set_keys') {
     const error = applyKeys(m);
@@ -2992,6 +2994,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     notchUi();
     ui({ kind: 'size', size: sizeNow() });
     ui({ kind: 'look', look: config.look ?? 'jarvis' });
+    ui({ kind: 'theme', theme: ['dark', 'system'].includes(config.theme) ? config.theme : 'light' });
     if (config.onboarded) ui({ kind: 'greet' });
     agents.sync();
   } else if (m.type?.startsWith('ob_') || m.type?.startsWith('chat_') || m.type === 'set_keys' || m.type === 'set_actions' || m.type === 'set_login' || m.type === 'keybind_error') onGuide(m).catch((e) => console.error('guide', e));
